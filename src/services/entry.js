@@ -34,12 +34,38 @@ function pick(obj, key) {
   return undefined
 }
 
+/**
+ * 金额清洗：把外部工具（OCR 截图、听写、短信原文）带出来的杂字符剥掉。
+ * 现实输入长这样 —— 「¥1,234.50」「35.50元」「￥ 12」「1 234.5」「34.5元整」，
+ * 直接 Number() 全是 NaN，会让整条入口链路白给，所以先洗再转。
+ * 只保留数字、小数点和负号；千分位逗号与空格一并去掉。
+ * 注意：负号不去掉（用来识别退款/更正），清洗后仍由 normAmount 的 >0 判断兜底。
+ */
+function cleanAmount(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  const s = String(v ?? '').trim()
+  if (!s) return null
+  // 去掉货币符号、千分位逗号、空格、以及「元/块/圆」等中文单位后缀。
+  // 注意两种「元」符号都要覆盖：半角 U+00A5（¥，多来自英文输入/接口）
+  // 与全角 U+FFE5（￥，中文键盘打出来就是这个）—— 少一个就会漏洗。
+  const stripped = s
+    .replace(/[¥￥$€£]/g, '')
+    .replace(/,/g, '')
+    .replace(/\s/g, '')
+    .replace(/[元块圆整钱]/g, '')
+  // 只认「-(数字).(数字)」这种纯数字形态，避免把「10.5.3」这类脏串当金额
+  const m = stripped.match(/^-?\d+(\.\d+)?$/)
+  if (!m) return null
+  const n = Number(m[0])
+  return Number.isFinite(n) ? n : null
+}
+
 /** 金额：「元」→「分」。非数字 / ≤0 / 空 → null（调用方据此忽略该字段） */
 function normAmount(v) {
   if (v === undefined || v === null || v === '') return null
-  const n = Number(v)
-  if (!Number.isFinite(n) || n <= 0) return null
-  const fen = toFen(v)
+  const cleaned = cleanAmount(v)
+  if (cleaned === null || cleaned <= 0) return null
+  const fen = toFen(cleaned)
   return fen > 0 ? fen : null
 }
 

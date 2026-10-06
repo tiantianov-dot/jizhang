@@ -184,6 +184,37 @@ async function readRecords(page) {
   const recs5 = await readRecords(page)
   check('剪贴板 autosave 自动入账 700 分', recs5.some((r) => r.amount === 700 && !r.deleted))
 
+  /* ---------- 7. 金额清洗：OCR / 截图带出来的脏写法 ---------- */
+  // 「简记」式截图记账会把 OCR 原文里的金额直接塞进 URL，形态千奇百怪，
+  // 必须在服务层洗干净，否则整条入口链路白给（Number('¥1,234.50') === NaN）
+  const dirty = [
+    ['%C2%A51%2C234.50', 123450, '¥1,234.50（货币符 + 千分位）'],
+    ['35.50%E5%85%83', 3550, '35.50元（中文单位后缀）'],
+    ['%EF%BF%A5%2012', 1200, '￥ 12（全角 U+FFE5 + 空格）'],
+    ['1234.5', 123450, '1234.5（纯数字）'],
+    ['1%20234.5', 123450, '1 234.5（空格千分位）'],
+  ]
+  for (const [raw, expectFen, label] of dirty) {
+    await page.goto('about:blank')
+    await page.goto(`${BASE}/#/add?amount=${raw}&autosave=1`)
+    await page.waitForSelector('.cats .cat', { timeout: 8000 })
+    await page.waitForFunction(
+      () => !!document.querySelector('.toast')?.textContent.includes('已记'),
+      { timeout: 4000 },
+    ).catch(() => {})
+    const rs = await readRecords(page)
+    check(`金额清洗：${label}`, rs.some((r) => r.amount === expectFen && !r.deleted),
+      `期望 ${expectFen} 分，实际 ${JSON.stringify(rs.map((r) => r.amount))}`)
+  }
+
+  // 反例：洗不出合法金额时绝不入账（防「10.5.3」这类脏串被当金额）
+  await page.goto('about:blank')
+  await page.goto(`${BASE}/#/add?amount=10.5.3&autosave=1`)
+  await page.waitForSelector('.cats .cat', { timeout: 8000 })
+  await page.waitForTimeout(600)
+  const recsDirty = await readRecords(page)
+  check('脏串 10.5.3 不入账（金额非法）', !recsDirty.some((r) => !r.deleted && String(r.note).includes('脏')))
+
   await browser.close()
   console.log(`\n结果: ${pass} PASS, ${fail} FAIL`)
   process.exit(fail ? 1 : 0)
