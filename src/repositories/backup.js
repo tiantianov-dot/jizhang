@@ -1,0 +1,48 @@
+/**
+ * repositories/backup.js — 导出 / 导入 JSON（防清缓存丢数据的底线功能）
+ *
+ * 导出：三表全量快照。
+ * 导入：合并策略 —— records/categories 按 id 对齐、updatedAt 新者胜；settings 直接覆盖。
+ * 注意：导入的记录若带 deleted/private 标记会原样保留（与同步语义一致）。
+ */
+
+import { getAll, putOne, getOne } from '@/db'
+
+const APP_TAG = 'jizhang'
+const BACKUP_VERSION = 1
+
+export async function exportAll() {
+  const [records, categories, settings] = await Promise.all([
+    getAll('records'),
+    getAll('categories'),
+    getAll('settings'),
+  ])
+  return { app: APP_TAG, version: BACKUP_VERSION, exportedAt: new Date().toISOString(), records, categories, settings }
+}
+
+/**
+ * @param {Object} payload exportAll() 产出的对象
+ * @returns {Promise<{added: number, updated: number}>} records 的合并统计
+ */
+export async function importMerge(payload) {
+  if (!payload || payload.app !== APP_TAG) throw new Error('不是本应用的备份文件')
+
+  let added = 0
+  let updated = 0
+  for (const rec of payload.records || []) {
+    const old = await getOne('records', rec.id)
+    if (!old) added++
+    else if ((rec.updatedAt || 0) > (old.updatedAt || 0)) updated++
+    else continue
+    await putOne('records', rec)
+  }
+  for (const cat of payload.categories || []) {
+    const old = await getOne('categories', cat.id)
+    if (old && (cat.updatedAt || 0) <= (old.updatedAt || 0)) continue
+    await putOne('categories', cat)
+  }
+  for (const row of payload.settings || []) {
+    await putOne('settings', row)
+  }
+  return { added, updated }
+}
