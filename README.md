@@ -4,13 +4,13 @@
 
 Local-first 记账 PWA：无后端，数据全部存在浏览器 IndexedDB；可添加到 iOS 主屏幕当 App 用；远景是异地情侣双人同步（字段已预留，同步层未实现）。
 
-**给 Agent 的提示**：接手本项目请先读完本文件，再读 `src/models.js`（字段约定源头）与 `src/db/index.js`（引擎层）。完整设计决策见计划文件 `C:\Users\lenovo\.workbuddy\plans\cosmic-beacon-darwin-2VbV2MeX.md`。
+**给 Agent 的提示**：接手本项目请先读完本文件，再读 `src/models.js`（字段约定源头）与 `src/db/index.js`（引擎层）。完整设计决策与演进史见 `docs/DESIGN.md`。
 
 ## 环境要求
 
-- Node `^22.18.0 || >=24.12.0`（本机路径 `C:\Users\lenovo\.workbuddy\binaries\node\versions\22.22.2-6`，低于 22.18 的 Node 跑不起来）
+- Node `^22.18.0 || >=24.12.0`（低于 22.18 的 Node 跑不起来）
 - 项目内 `.npmrc` 已指向 npmmirror 源（国内加速）
-- 图标重新生成：`python scripts/gen_icons.py`（需 Pillow，本机 venv 在 `C:\Users\lenovo\.workbuddy\binaries\python\envs\default`）
+- 图标重新生成：`python scripts/gen_icons.py`（需 Pillow）
 
 ## 常用命令
 
