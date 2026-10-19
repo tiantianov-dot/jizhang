@@ -18,6 +18,8 @@ export default defineConfig({
       manifest: {
         name: '极简记账',
         short_name: '记账',
+        id: './',
+        lang: 'zh-CN',
         description: '极简功能不减，快速记账',
         theme_color: '#0f6e56',
         background_color: '#ffffff',
