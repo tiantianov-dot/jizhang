@@ -4,8 +4,11 @@
  */
 
 :root {
-  /* 全局玻璃质感强度：0.3~1.0，由设置页滑块控制，只改这一个变量 */
+  /* 全局玻璃质感强度：0.3~1.0，由设置页滑块控制，只作用于 alpha/blur/saturate */
   --glass-intensity: 1;
+
+  /* 背景压暗：0~0.6，独立于玻璃强度；U5 沉浸模式单独调节 */
+  --glass-dim: .3;
 
   /* 光照方向全站统一：左上 135° */
   --glass-highlight: linear-gradient(135deg,
@@ -77,21 +80,23 @@ html[data-glass='on'] body::before {
   }
 }
 
-/* 内容背板：rgba 模拟玻璃，不背 backdrop-filter */
+/* 内容背板：rgba 模拟玻璃，不背 backdrop-filter；压暗只吃 --glass-dim */
 html[data-glass='on'] .card {
-  background-color: rgba(30,30,34,.45);
+  background-color: rgba(30,30,34, calc(.32 + var(--glass-dim)));
   background-image: var(--glass-highlight);
   border: 1px solid var(--glass-edge);
   border-radius: var(--g-reg-radius);
   box-shadow: var(--glass-shadow);
+  text-shadow: 0 1px 2px rgba(0,0,0,.45);
 }
 
-/* 列表行：零 backdrop-filter，后续批次直接挂 class */
+/* 列表行：零 backdrop-filter；压暗板 + 文字阴影，保证亮背景上可读 */
 html[data-glass='on'] .glass-row {
-  background-color: rgba(255,255,255,.06);
+  background-color: rgba(0,0,0, calc(.25 + var(--glass-dim)));
   background-image: var(--glass-highlight);
   border: 1px solid var(--glass-edge);
   box-shadow: var(--glass-shadow);
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
 }
 
 /* toast / 遮罩深色适配（scoped 原样式优先级更高，故带 html 前缀） */
