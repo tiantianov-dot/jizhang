@@ -65,18 +65,19 @@ function press(key) {
 }
 
 .key {
-  background-color: rgba(0, 0, 0, calc(.25 + var(--glass-dim)));
+  /* 高亮背景下按键需保持白字 ≥4.5:1：alpha 吃独立压暗变量并内置下限 */
+  background-color: rgba(0, 0, 0, calc(.48 + var(--glass-dim)));
   background-image: var(--glass-highlight);
   border: 1px solid var(--glass-edge);
   border-radius: 10px;
   color: var(--text);
   font-size: 20px;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .75), 0 0 4px rgba(0, 0, 0, .45);
 }
 
 .key:active {
-  background-color: rgba(0, 0, 0, calc(.35 + var(--glass-dim)));
+  background-color: rgba(0, 0, 0, calc(.60 + var(--glass-dim)));
 }
 
 .key:disabled {
@@ -109,13 +110,14 @@ function press(key) {
   height: 100%;
 }
 
-/* 编辑页的 ✓：保留绿色识别，但不加 backdrop-filter，守住 Edit 常驻 2 层预算 */
+/* 编辑页的 ✓：保留绿色识别，但不加 backdrop-filter，守住 Edit 常驻 2 层预算；
+   底色用深绿板而非浅绿透明，白字在亮背景上仍可读 */
 .key.ok.plain {
-  border: 1px solid rgba(52, 199, 123, .45);
+  border: 1px solid rgba(52, 199, 123, .6);
   border-radius: 10px;
-  background-color: rgba(52, 199, 123, .18);
+  background-color: rgba(9, 56, 34, .8);
   box-shadow: 0 0 12px rgba(52, 199, 123, .18);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .75), 0 0 4px rgba(0, 0, 0, .45);
 }
 
 /* ⌫ 提到最后一列第一格：调整键位顺序由 CSS grid auto-placement 处理 */

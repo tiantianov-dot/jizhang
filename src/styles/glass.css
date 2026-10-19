@@ -4,7 +4,7 @@
  */
 
 :root {
-  /* 全局玻璃质感强度：0.3~1.0，由设置页滑块控制，只作用于 alpha/blur/saturate */
+  /* 全局玻璃质感强度：0.3~1.0，由设置页滑块控制，只作用于 blur/saturate；不参与任何压暗计算 */
   --glass-intensity: 1;
 
   /* 背景压暗：0~0.6，独立于玻璃强度；U5 沉浸模式单独调节 */
@@ -12,27 +12,27 @@
 
   /* 光照方向全站统一：左上 135° */
   --glass-highlight: linear-gradient(135deg,
-      rgba(255,255,255,.14), rgba(255,255,255,.04) 40%, transparent 60%);
+      rgba(255,255,255,.10), rgba(255,255,255,.03) 40%, transparent 60%);
   --glass-edge: rgba(255,255,255,.10);        /* 1px 描边 */
   --glass-shadow: 0 8px 24px rgba(0,0,0,.35),
                   inset 0 1px 1px rgba(255,255,255,.08);
 
+  /* 真玻璃背板：暗度只吃 --glass-dim（0~.6），并内置下限，保证高亮背景上白字可读。
+   * 默认 dim=.3 时 alpha：regular .67 / clear .61 / identity .65。 */
   /* regular —— Tab Bar、日期胶囊、搜索框、普通卡片 */
-  --g-reg-bg:     color-mix(in srgb, rgba(30,30,34,.55)
-                  calc(var(--glass-intensity) * 100%), rgba(30,30,34,.15));
+  --g-reg-bg:     rgba(30,30,34, calc(.58 + var(--glass-dim) * .3));
   --g-reg-blur:   blur(calc(20px * var(--glass-intensity)))
                   saturate(calc(1 + 0.6 * var(--glass-intensity)));
   --g-reg-radius: 18px;
 
   /* clear —— 余额卡、金额数字区（要可读性） */
-  --g-clr-bg:     color-mix(in srgb, rgba(24,24,28,.35)
-                  calc(var(--glass-intensity) * 100%), rgba(24,24,28,.10));
+  --g-clr-bg:     rgba(24,24,28, calc(.52 + var(--glass-dim) * .3));
   --g-clr-blur:   blur(calc(28px * var(--glass-intensity)))
                   saturate(calc(1 + 0.8 * var(--glass-intensity)));
   --g-clr-radius: 22px;
 
   /* identity —— 确认键、记一笔 FAB（要「亮起来」） */
-  --g-id-bg:      rgba(52,199,123, calc(.28 * var(--glass-intensity) + .08));
+  --g-id-bg:      rgba(52,199,123, calc(.56 + var(--glass-dim) * .3));
   --g-id-blur:    blur(calc(16px * var(--glass-intensity)))
                   saturate(calc(1 + 1.1 * var(--glass-intensity)));
   --g-id-radius:  999px;
@@ -47,6 +47,10 @@ html[data-glass='on'] {
   --text-secondary: rgba(255,255,255,.65);
   --border: rgba(255,255,255,.14);
   --expense: #f1efe8;
+  /* 深底语义色：收入/超支必须是亮色变体，否则对 #141413 只有 2.61:1。
+   * 注意 --danger 同时用于文字与预算条，填充型危险按钮改用固定深红（见各组件的 .warn）。 */
+  --income: #ff8a8a;
+  --danger: #ff6b6b;
   background-color: #141413;
 }
 

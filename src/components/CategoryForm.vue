@@ -248,8 +248,9 @@ async function remove() {
 }
 
 .del.warn {
-  background: var(--danger);
-  border-color: var(--danger);
+  /* 填充态不能跟 --danger 走亮红：白字在 #ff6b6b 上不足 4.5:1 */
+  background: #c0392b;
+  border-color: #c0392b;
   color: #fff;
   font-weight: 600;
 }
