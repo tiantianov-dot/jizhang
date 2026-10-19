@@ -7,6 +7,7 @@ import { toFen, fenToYuan, fenToInput, todayStr } from '@/utils/format'
 import { parseEntryQuery, parseEntryJson } from '@/services/entry'
 import AmountPad from '@/components/AmountPad.vue'
 import CategoryGrid from '@/components/CategoryGrid.vue'
+import GlassPanel from '@/components/GlassPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -196,13 +197,13 @@ async function undo() {
 <template>
   <div class="page add">
     <!-- 收支切换 + 金额 -->
-    <div class="head card">
+    <GlassPanel tier="clear" class="head card">
       <div class="seg">
         <button :class="{ on: type === 'expense' }" @click="switchType('expense')">支出</button>
         <button :class="{ on: type === 'income' }" @click="switchType('income')">收入</button>
       </div>
       <div class="amount" :class="type">¥ {{ display }}</div>
-    </div>
+    </GlassPanel>
 
     <!-- 分类大按钮平铺：最近使用自动排前 -->
     <CategoryGrid v-model="activeCat" :cats="cats" />
@@ -244,9 +245,19 @@ async function undo() {
   gap: 12px;
 }
 
+/* GlassPanel 的内容层垫在 blur/border 之上，布局落在它身上 */
+.head :deep(.gp-content) {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
 .seg {
   display: flex;
-  background: var(--bg);
+  background: rgba(0, 0, 0, .22);
   border-radius: 999px;
   padding: 3px;
 }
@@ -259,10 +270,10 @@ async function undo() {
 }
 
 .seg button.on {
-  background: var(--surface);
+  background: rgba(255, 255, 255, .14);
   color: var(--text);
   font-weight: 600;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 1px 4px rgba(0, 0, 0, .25);
 }
 
 .amount {

@@ -7,11 +7,15 @@
  * 输入限制与键位布局沿用记一笔页原有实现：整数 7 位、小数 2 位；
  * ✓ 占最后一列下三格，⌫ 提到最后一列第一格。
  */
+import GlassPanel from './GlassPanel.vue'
+
 const props = defineProps({
   /** 金额输入缓冲（v-model:buffer） */
   buffer: { type: String, default: '' },
   /** 父级正在写库：期间禁用 ✓，避免连点重复入账 */
   saving: { type: Boolean, default: false },
+  /** ✓ 是否上 identity 真玻璃；编辑页按层预算关闭（arch ④：Edit 常驻仅 2 层） */
+  identity: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['update:buffer', 'save'])
@@ -42,7 +46,12 @@ function press(key) {
     <button v-for="k in keys" :key="k" class="key" @click="press(k)">
       {{ k === 'back' ? '⌫' : k }}
     </button>
-    <button class="key ok" :disabled="saving" @click="emit('save')">✓</button>
+    <button class="key ok" :class="{ plain: !identity }" :disabled="saving" @click="emit('save')">
+      <GlassPanel v-if="identity" tier="identity" class="ok-panel">
+        <span class="ok-label">✓</span>
+      </GlassPanel>
+      <span v-else class="ok-label">✓</span>
+    </button>
   </div>
 </template>
 
@@ -56,33 +65,57 @@ function press(key) {
 }
 
 .key {
-  background: var(--surface);
-  border: 0.5px solid var(--border);
+  background-color: rgba(0, 0, 0, calc(.25 + var(--glass-dim)));
+  background-image: var(--glass-highlight);
+  border: 1px solid var(--glass-edge);
   border-radius: 10px;
+  color: var(--text);
   font-size: 20px;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
 }
 
 .key:active {
-  background: var(--bg);
+  background-color: rgba(0, 0, 0, calc(.35 + var(--glass-dim)));
 }
 
 .key:disabled {
   opacity: 0.55;
 }
 
-/* ✓ 占最后一列下三格 */
+/* ✓ 占最后一列下三格，材质走 identity 档 */
 .key.ok {
+  position: relative;
   grid-column: 4;
   grid-row: 2 / span 3;
-  background: var(--brand);
+  padding: 0;
+  border: none;
+  background: none;
   color: #fff;
   font-size: 24px;
   font-weight: 600;
 }
 
-.key.ok:active {
-  background: var(--brand-strong);
+.key.ok > .ok-panel {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+}
+
+.key.ok :deep(.gp-content) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* 编辑页的 ✓：保留绿色识别，但不加 backdrop-filter，守住 Edit 常驻 2 层预算 */
+.key.ok.plain {
+  border: 1px solid rgba(52, 199, 123, .45);
+  border-radius: 10px;
+  background-color: rgba(52, 199, 123, .18);
+  box-shadow: 0 0 12px rgba(52, 199, 123, .18);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
 }
 
 /* ⌫ 提到最后一列第一格：调整键位顺序由 CSS grid auto-placement 处理 */

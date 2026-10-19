@@ -1,4 +1,6 @@
 <script setup>
+import GlassPanel from './GlassPanel.vue'
+
 const tabs = [
   { to: '/', label: '记一笔', icon: '➕' },
   { to: '/list', label: '流水', icon: '📒' },
@@ -8,12 +10,12 @@ const tabs = [
 </script>
 
 <template>
-  <nav class="tabbar">
+  <GlassPanel tier="regular" class="tabbar" role="navigation" aria-label="主导航">
     <RouterLink v-for="t in tabs" :key="t.to" :to="t.to" class="tab" active-class="active">
       <span class="icon">{{ t.icon }}</span>
       <span class="label">{{ t.label }}</span>
     </RouterLink>
-  </nav>
+  </GlassPanel>
 </template>
 
 <style scoped>
@@ -27,9 +29,26 @@ const tabs = [
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
   display: flex;
-  background: var(--surface);
-  border-top: 0.5px solid var(--border);
+  border-radius: 0;
   z-index: 10;
+}
+
+/* 根节点同时被 GlassPanel 的 .gp 命中，双类名压过它的 position:relative */
+.tabbar.gp {
+  position: fixed;
+  border-radius: 0;
+}
+
+.tabbar :deep(.gp-content) {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 贴屏幕底：只留顶缘描边，不做圆角 */
+.tabbar :deep(.gp-border) {
+  border-width: 1px 0 0;
+  border-radius: 0;
 }
 
 .tab {

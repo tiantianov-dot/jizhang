@@ -13,6 +13,7 @@ import { useRecordsStore } from '@/stores/records'
 import { toFen, fenToYuan, fenToInput } from '@/utils/format'
 import AmountPad from '@/components/AmountPad.vue'
 import CategoryGrid from '@/components/CategoryGrid.vue'
+import GlassPanel from '@/components/GlassPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -145,13 +146,13 @@ async function remove() {
     </div>
 
     <!-- 收支切换 + 金额 -->
-    <div class="head card">
+    <GlassPanel tier="clear" class="head card">
       <div class="seg">
         <button :class="{ on: type === 'expense' }" @click="switchType('expense')">支出</button>
         <button :class="{ on: type === 'income' }" @click="switchType('income')">收入</button>
       </div>
       <div class="amount" :class="type">¥ {{ display }}</div>
-    </div>
+    </GlassPanel>
 
     <!-- 分类：保留原分类；原分类已归档时降级显示「未分类」 -->
     <CategoryGrid v-model="categoryId" :cats="cats" />
@@ -181,7 +182,7 @@ async function remove() {
     </button>
 
     <!-- 数字键盘 -->
-    <AmountPad v-model:buffer="buffer" :saving="saving" @save="save" />
+    <AmountPad v-model:buffer="buffer" :saving="saving" :identity="false" @save="save" />
 
     <!-- 校验反馈 -->
     <button v-if="toast" class="toast" @click="toast = ''">{{ toast }}</button>
@@ -218,9 +219,19 @@ async function remove() {
   gap: 12px;
 }
 
+/* GlassPanel 的内容层垫在 blur/border 之上，布局落在它身上 */
+.head :deep(.gp-content) {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
 .seg {
   display: flex;
-  background: var(--bg);
+  background: rgba(0, 0, 0, .22);
   border-radius: 999px;
   padding: 3px;
 }
@@ -233,10 +244,10 @@ async function remove() {
 }
 
 .seg button.on {
-  background: var(--surface);
+  background: rgba(255, 255, 255, .14);
   color: var(--text);
   font-weight: 600;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 1px 4px rgba(0, 0, 0, .25);
 }
 
 .amount {
@@ -286,12 +297,13 @@ async function remove() {
   opacity: 1;
 }
 
+/* danger 语义靠红色底/描边承载，文字用纯白保证深底可读 */
 .del {
   padding: 12px 0;
   border-radius: 10px;
-  border: 0.5px solid var(--border);
-  background: var(--surface);
-  color: var(--danger);
+  border: 1px solid rgba(163, 45, 45, .55);
+  background: rgba(163, 45, 45, .22);
+  color: #fff;
   font-size: 15px;
 }
 
