@@ -181,7 +181,7 @@ async function remove() {
 
 .seg {
   display: flex;
-  background: var(--bg);
+  background: rgba(0, 0, 0, .22);
   border-radius: 999px;
   padding: 3px;
 }
@@ -194,7 +194,7 @@ async function remove() {
 }
 
 .seg button.on {
-  background: var(--surface);
+  background: rgba(255, 255, 255, .14);
   color: var(--text);
   font-weight: 600;
 }
@@ -202,9 +202,9 @@ async function remove() {
 .input {
   flex: 1;
   min-width: 0;
-  border: 0.5px solid var(--border);
+  border: 1px solid var(--glass-edge);
   border-radius: 8px;
-  background: var(--bg);
+  background: rgba(0, 0, 0, .22);
   color: var(--text);
   font-size: 14px;
   padding: 8px 10px;
@@ -233,16 +233,17 @@ async function remove() {
 .btn.ghost {
   flex: none;
   width: 5em;
-  background: var(--bg);
+  background: rgba(0, 0, 0, .22);
+  border: 1px solid var(--glass-edge);
   color: var(--text-secondary);
 }
 
 .del {
   padding: 10px 0;
   border-radius: 10px;
-  border: 0.5px solid var(--border);
-  background: var(--surface);
-  color: var(--danger);
+  border: 1px solid rgba(163, 45, 45, .55);
+  background: rgba(163, 45, 45, .22);
+  color: #fff;
   font-size: 14px;
 }
 

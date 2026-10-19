@@ -14,6 +14,7 @@ import { budgetUsage, byCategorySum, dailySums, shiftMonth } from '@/services/st
 import DonutChart from '@/components/DonutChart.vue'
 import BarChart from '@/components/BarChart.vue'
 import CategoryBudgetList from '@/components/CategoryBudgetList.vue'
+import GlassPanel from '@/components/GlassPanel.vue'
 
 const records = useRecordsStore()
 const settings = useSettingsStore()
@@ -91,11 +92,11 @@ const showBudgets = computed(
       <RouterLink class="entry" to="/categories">分类管理 ›</RouterLink>
     </div>
 
-    <div class="mbar">
+    <GlassPanel tier="regular" class="mbar">
       <button class="nav" @click="prevMonth">‹</button>
       <span class="mon">{{ month }}</span>
       <button class="nav" @click="nextMonth">›</button>
-    </div>
+    </GlassPanel>
 
     <div class="card sums">
       <div class="sum">
@@ -170,7 +171,17 @@ const showBudgets = computed(
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding: 6px 10px;
   margin-bottom: 10px;
+}
+
+.mbar :deep(.gp-content) {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
 }
 
 .mon {
@@ -183,8 +194,8 @@ const showBudgets = computed(
   width: 44px;
   height: 36px;
   border-radius: 8px;
-  background: var(--surface);
-  border: 0.5px solid var(--border);
+  background: rgba(0, 0, 0, .22);
+  border: 1px solid var(--glass-edge);
   color: var(--text);
   font-size: 18px;
   line-height: 1;
@@ -241,7 +252,7 @@ const showBudgets = computed(
 .bar {
   height: 8px;
   border-radius: 999px;
-  background: var(--bg);
+  background: rgba(0, 0, 0, .35);
   overflow: hidden;
 }
 

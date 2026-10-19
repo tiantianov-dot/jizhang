@@ -76,7 +76,7 @@ const missing = computed(
 }
 
 .cat.on .name {
-  color: var(--brand);
+  color: #fff;
   font-weight: 600;
 }
 

@@ -20,6 +20,7 @@ import {
   sumAmount,
 } from '@/services/stats'
 import CategoryFilterSheet from '@/components/CategoryFilterSheet.vue'
+import GlassPanel from '@/components/GlassPanel.vue'
 
 const router = useRouter()
 const records = useRecordsStore()
@@ -148,7 +149,7 @@ onUnmounted(() => clearTimeout(undoTimer))
     </p>
 
     <template v-else>
-      <div class="mbar">
+      <GlassPanel tier="regular" class="mbar">
         <div class="mnav">
           <button class="nav" @click="prevMonth">‹</button>
           <span class="mon">{{ month }}</span>
@@ -158,7 +159,7 @@ onUnmounted(() => clearTimeout(undoTimer))
           <span>支 {{ fmtFen(expenseSum) }}</span>
           <span class="income">收 {{ fmtFen(incomeSum) }}</span>
         </span>
-      </div>
+      </GlassPanel>
 
       <div class="filters">
         <form class="search" @submit.prevent="onSearchSubmit">
@@ -185,7 +186,7 @@ onUnmounted(() => clearTimeout(undoTimer))
           <span v-if="g.dayExpense" class="day-sum">支 ¥{{ fenToYuan(g.dayExpense) }}</span>
         </div>
         <div class="card rows">
-          <button v-for="r in g.items" :key="r.id" class="row" @click="openRecord(r)">
+          <button v-for="r in g.items" :key="r.id" class="row glass-row" @click="openRecord(r)">
             <span class="emoji">{{ catOf(r)?.emoji || '📦' }}</span>
             <span class="main">
               <span class="cat">{{ catOf(r)?.name || '未分类' }}</span>
@@ -220,7 +221,17 @@ onUnmounted(() => clearTimeout(undoTimer))
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding: 6px 10px;
   margin-bottom: 10px;
+}
+
+.mbar :deep(.gp-content) {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
 }
 
 .mnav {
@@ -239,8 +250,8 @@ onUnmounted(() => clearTimeout(undoTimer))
   width: 44px;
   height: 36px;
   border-radius: 8px;
-  background: var(--surface);
-  border: 0.5px solid var(--border);
+  background: rgba(0, 0, 0, .22);
+  border: 1px solid var(--glass-edge);
   color: var(--text);
   font-size: 18px;
   line-height: 1;
@@ -276,8 +287,8 @@ onUnmounted(() => clearTimeout(undoTimer))
   height: 36px;
   padding: 0 12px;
   border-radius: 8px;
-  border: 0.5px solid var(--border);
-  background: var(--surface);
+  border: 1px solid var(--glass-edge);
+  background: rgba(0, 0, 0, .22);
   color: var(--text);
   font-size: 16px; /* ≥16px：防 iOS 聚焦输入框时页面自动放大 */
   appearance: none;
@@ -293,8 +304,8 @@ onUnmounted(() => clearTimeout(undoTimer))
   height: 36px;
   padding: 0 12px;
   border-radius: 8px;
-  border: 0.5px solid var(--border);
-  background: var(--surface);
+  border: 1px solid var(--glass-edge);
+  background: rgba(0, 0, 0, .22);
   color: var(--text-secondary);
   font-size: 13px;
   overflow: hidden;
@@ -303,8 +314,8 @@ onUnmounted(() => clearTimeout(undoTimer))
 }
 
 .fbtn.on {
-  color: var(--brand);
-  border-color: var(--brand);
+  color: #fff;
+  border-color: rgba(52, 199, 123, .6);
   font-weight: 600;
 }
 
@@ -324,8 +335,13 @@ onUnmounted(() => clearTimeout(undoTimer))
   font-variant-numeric: tabular-nums;
 }
 
+/* 外壳压到很低，材质交给每一行的 .glass-row（零 backdrop-filter） */
 .rows {
-  padding: 2px 12px;
+  padding: 6px;
+}
+
+html[data-glass='on'] .rows {
+  background-color: rgba(30, 30, 34, .18);
 }
 
 .row {
@@ -335,12 +351,18 @@ onUnmounted(() => clearTimeout(undoTimer))
   width: 100%;
   min-height: 44px;
   text-align: left;
-  padding: 10px 0;
-  border-bottom: 0.5px solid var(--border);
+  padding: 10px 8px;
+  border-radius: 10px;
+  margin-bottom: 4px;
 }
 
 .row:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
+}
+
+/* 行在卡片内部，去掉外投影避免多层阴影堆叠 */
+.rows .row {
+  box-shadow: none;
 }
 
 .emoji {

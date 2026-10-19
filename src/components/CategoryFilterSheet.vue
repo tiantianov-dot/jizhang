@@ -6,6 +6,7 @@
  * 只接收 props（分类数据由父级从 categories store 取出），自身不取数、不过滤。
  */
 import { onMounted, onUnmounted } from 'vue'
+import GlassPanel from './GlassPanel.vue'
 
 defineProps({
   /** 当前选中的 categoryId，'' = 全部 */
@@ -40,49 +41,51 @@ onUnmounted(() => {
 <template>
   <div class="mask" @click="emit('close')">
     <!-- @click.stop：点卡片内部不收起 -->
-    <div class="sheet" @click.stop>
-      <div class="s-head">按分类筛选</div>
+    <GlassPanel tier="regular" class="sheet" @click.stop>
+      <div class="sheet-scroll">
+        <div class="s-head">按分类筛选</div>
 
-      <div class="s-sec">全部</div>
-      <div class="grid">
-        <button class="item" :class="{ on: !modelValue }" @click="pick('')">
-          <span class="emoji">🧾</span>
-          <span class="name">全部</span>
-        </button>
+        <div class="s-sec">全部</div>
+        <div class="grid">
+          <button class="item" :class="{ on: !modelValue }" @click="pick('')">
+            <span class="emoji">🧾</span>
+            <span class="name">全部</span>
+          </button>
+        </div>
+
+        <template v-if="expense.length">
+          <div class="s-sec">支出分类</div>
+          <div class="grid">
+            <button
+              v-for="c in expense"
+              :key="c.id"
+              class="item"
+              :class="{ on: modelValue === c.id }"
+              @click="pick(c.id)"
+            >
+              <span class="emoji">{{ c.emoji }}</span>
+              <span class="name">{{ c.name }}</span>
+            </button>
+          </div>
+        </template>
+
+        <template v-if="income.length">
+          <div class="s-sec">收入分类</div>
+          <div class="grid">
+            <button
+              v-for="c in income"
+              :key="c.id"
+              class="item"
+              :class="{ on: modelValue === c.id }"
+              @click="pick(c.id)"
+            >
+              <span class="emoji">{{ c.emoji }}</span>
+              <span class="name">{{ c.name }}</span>
+            </button>
+          </div>
+        </template>
       </div>
-
-      <template v-if="expense.length">
-        <div class="s-sec">支出分类</div>
-        <div class="grid">
-          <button
-            v-for="c in expense"
-            :key="c.id"
-            class="item"
-            :class="{ on: modelValue === c.id }"
-            @click="pick(c.id)"
-          >
-            <span class="emoji">{{ c.emoji }}</span>
-            <span class="name">{{ c.name }}</span>
-          </button>
-        </div>
-      </template>
-
-      <template v-if="income.length">
-        <div class="s-sec">收入分类</div>
-        <div class="grid">
-          <button
-            v-for="c in income"
-            :key="c.id"
-            class="item"
-            :class="{ on: modelValue === c.id }"
-            @click="pick(c.id)"
-          >
-            <span class="emoji">{{ c.emoji }}</span>
-            <span class="name">{{ c.name }}</span>
-          </button>
-        </div>
-      </template>
-    </div>
+    </GlassPanel>
   </div>
 </template>
 
@@ -93,19 +96,27 @@ onUnmounted(() => {
   z-index: 30; /* 高于 TabBar(10) 与撤销 toast(20) */
   display: flex;
   align-items: flex-end;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, .45);
 }
 
 .sheet {
   width: 100%;
   max-width: 520px; /* 与 #app 同宽，桌面访问版式一致 */
   margin: 0 auto;
+  border-radius: 18px 18px 0 0;
+}
+
+.sheet.gp {
+  border-radius: 18px 18px 0 0;
+}
+
+/* 滚动放在内容层内：blur 层固定，不随弹层内容滚走 */
+.sheet-scroll {
   max-height: 72vh;
   overflow-y: auto;
   overscroll-behavior: contain; /* sheet 内滚到头不穿透带动背景滚动 */
-  background: var(--surface);
-  border-radius: 16px 16px 0 0;
   padding: 14px 16px calc(env(safe-area-inset-bottom) + 16px);
+  border-radius: 18px 18px 0 0;
 }
 
 .s-head {
@@ -149,11 +160,11 @@ onUnmounted(() => {
 
 .item.on {
   border-color: var(--brand);
-  background: color-mix(in srgb, var(--brand) 8%, var(--surface));
+  background: color-mix(in srgb, var(--brand) 14%, var(--surface));
 }
 
 .item.on .name {
-  color: var(--brand);
+  color: #fff;
   font-weight: 600;
 }
 </style>

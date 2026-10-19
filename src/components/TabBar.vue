@@ -69,7 +69,7 @@ const tabs = [
 }
 
 .tab.active {
-  color: var(--brand);
+  color: #fff;
   font-weight: 600;
 }
 </style>

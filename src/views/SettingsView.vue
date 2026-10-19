@@ -203,9 +203,9 @@ async function doImport(e) {
 .input {
   flex: 1;
   min-width: 0;
-  border: 0.5px solid var(--border);
+  border: 1px solid var(--glass-edge);
   border-radius: 8px;
-  background: var(--bg);
+  background: rgba(0, 0, 0, .22);
   color: var(--text);
   font-size: 14px;
   padding: 8px 10px;
@@ -227,7 +227,7 @@ async function doImport(e) {
 
 .msg {
   font-size: 13px;
-  color: var(--brand);
+  color: var(--text-secondary);
   text-align: center;
 }
 </style>

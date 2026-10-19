@@ -194,17 +194,18 @@ async function restore(c) {
 
 .act {
   font-size: 13px;
-  color: var(--brand);
+  color: #fff;
   padding: 8px 0 8px 10px;
 }
 
 .btn.add {
-  background: var(--surface);
-  border: 0.5px dashed var(--brand);
-  color: var(--brand);
+  background: rgba(52, 199, 123, .12);
+  border: 1px dashed rgba(52, 199, 123, .55);
+  color: #fff;
   font-size: 14px;
   padding: 10px 0;
   border-radius: 10px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
 }
 
 .toast {
