@@ -26,17 +26,20 @@ export async function add(data) {
     createdAt: now,
     updatedAt: now,
     deleted: false,
+    deletedAt: null,
     private: false,
+    owner: 'me',
     ...data,
   }
   await putOne('records', rec)
 
-  // 驱动「最近使用排序」：记账即刷新分类的 lastUsedAt
+  // 驱动「最近使用排序」：记账即刷新分类的 lastUsedAt。
+  // 这是本地使用信号，不参与同步 —— 因此绝不能同时刷新 cat.updatedAt，
+  // 否则「我用了一次分类」会被合并成一次分类编辑推给对方（破坏约定 5）。
   if (rec.categoryId) {
     const cat = await getOne('categories', rec.categoryId)
     if (cat) {
       cat.lastUsedAt = now
-      cat.updatedAt = now
       await putOne('categories', cat)
     }
   }
@@ -50,12 +53,14 @@ export async function update(rec) {
   return rec
 }
 
-/** 软删除（同步友好，records 永不硬删） */
+/** 软删除（同步友好，records 永不硬删）。deletedAt 是未来墓碑回收的依据 */
 export async function softDelete(id) {
   const rec = await getOne('records', id)
   if (!rec) return null
+  const now = Date.now()
   rec.deleted = true
-  rec.updatedAt = Date.now()
+  rec.deletedAt = now
+  rec.updatedAt = now
   await putOne('records', rec)
   return rec
 }
@@ -65,6 +70,7 @@ export async function restore(id) {
   const rec = await getOne('records', id)
   if (!rec) return null
   rec.deleted = false
+  rec.deletedAt = null
   rec.updatedAt = Date.now()
   await putOne('records', rec)
   return rec

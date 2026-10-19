@@ -49,7 +49,7 @@ export async function seedIfEmpty() {
     })
   })
   await tx('settings', 'readwrite', (s) => {
-    s.put({ key: 'monthlyBudget', value: 0 }) // 月度总预算（分），0 = 不设
-    s.put({ key: 'ownerName', value: '' })
+    s.put({ key: 'monthlyBudget', value: 0, updatedAt: now }) // 月度总预算（分），0 = 不设
+    s.put({ key: 'ownerName', value: '', updatedAt: now })
   })
 }

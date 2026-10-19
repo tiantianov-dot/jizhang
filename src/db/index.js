@@ -94,9 +94,9 @@ export async function countByIndex(store, indexName, key) {
   return wrap(db.transaction(store).objectStore(store).index(indexName).count(key))
 }
 
-/** 生成 uuid（同步主键） */
+/** 生成 uuid（同步主键）；HTTPS/PWA 环境必有 crypto.randomUUID，不做降级以免多写者撞 id */
 export function uuid() {
-  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return crypto.randomUUID()
 }
 
 /* ---------- 初始化 ---------- */
