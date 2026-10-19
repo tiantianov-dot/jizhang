@@ -6,7 +6,7 @@
 > | 项 | 原计划 | 实际落地 |
 > | --- | --- | --- |
 > | 技术栈 | 原生 HTML+CSS+JS，无构建 | **Vue 3 + Vite + Pinia + vue-router(hash) + vite-plugin-pwa**（JS 非 TS） |
-> | 托管 | GitHub Pages | **WorkBuddy Sites**（https://jizhang-pwa-25509.app.workbuddy.host/）；GitHub Pages 仍可作备选（vite base 已设 './'） |
+> | 托管 | GitHub Pages | **WorkBuddy Sites**（真实站点地址不写入本公开仓库，由使用者自行保管并填入 `SHORTCUTS.md` 的 `<你的站点地址>`）；GitHub Pages 仍可作备选（vite base 已设 './'） |
 > | 图表 | Chart.js CDN 或自绘 SVG | **手写 SVG**（DonutChart / BarChart，零依赖） |
 > | 入口通道 A | `webapp://` 带参拉起 PWA | **仍未真机验证**，主推 URL 参数（`#/add?...`）+ 剪贴板 JSON 兜底 |
 > | 快捷指令 | 四条捷径 | 已跑通**截图 OCR 链路**（截屏 → 提取文本 → 正则金额 → 弹窗选金额 → autosave 入账），详见 `SHORTCUTS.md` |
@@ -22,7 +22,7 @@
 
 - 理念：极简功能不减，唯一宗旨 = 方便快速记账
 - 形态：Local-first PWA（纯前端、无后端），GitHub Pages 托管，iPhone 添加到主屏幕作为唯一日常入口
-- 远景：异地情侣双人记账（先单人跑通；数据模型从第一天就预留同步字段，后期零迁移升级）
+- 远景：双人记账（先单人跑通；数据模型从第一天就预留同步字段，后期零迁移升级）
 
 ## 已确认决策
 
@@ -34,7 +34,7 @@
 | 核心功能 | 增删改查、自定义分类、月度统计/图表、总预算+分类预算（80% 变黄、超支变红） |
 | 账本范围 | 单账本（生活费收支），不做多账户/多账本 |
 | 双人同步 | 后期再加；现在预留 id / updatedAt / deleted / private 字段 |
-| 私密账单 | 现在实现：记录含 private 标记，标记后只存本地、永不同步（买礼物防剧透） |
+| 私密账单 | 现在实现：记录含 private 标记，标记后只存本地、永不同步 |
 | 采集方式 | 截图 OCR+确认 / Siri 语音 / 扣款短信 / 手动输入（分期实现） |
 | 解析引擎 | 先正则，AI 留接口（iOS 26 Apple Intelligence「使用模型」或自带 API key） |
 | 联动机制 | PWA 统一入口：`webapp://` 带参（待真机实测）+ 剪贴板 JSON 桥（兜底） |

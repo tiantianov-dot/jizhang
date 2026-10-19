@@ -2,7 +2,7 @@
 
 > 理念：**极简功能不减，唯一宗旨 = 方便快速记账**（记一笔 ≤3 次点击、≤3 秒）
 
-Local-first 记账 PWA：无后端，数据全部存在浏览器 IndexedDB；可添加到 iOS 主屏幕当 App 用；远景是异地情侣双人同步（字段已预留，同步层未实现）。
+Local-first 记账 PWA：无后端，数据全部存在浏览器 IndexedDB；可添加到 iOS 主屏幕当 App 用；远景是双人同步（字段已预留，同步层未实现）。
 
 **给 Agent 的提示**：接手本项目请先读完本文件，再读 `src/models.js`（字段约定源头）与 `src/db/index.js`（引擎层）。完整设计决策与演进史见 `docs/DESIGN.md`。
 
@@ -63,7 +63,7 @@ vite.config.js           # base './' + VitePWA(manifest + SW 离线缓存，buil
 
 1. **金额一律以「分」存整数**（`utils/format` 的 `toFen` / `fenToYuan` 转换），禁止浮点
 2. **删除 = 软删除**（`deleted: true`），为后期同步服务，禁止硬删 records
-3. **`private: true` 的账目是私密账单**（异地情侣买礼物防剧透），永不同步、永不进入共享视图
+3. **`private: true` 的账目是私密账单**（不参与将来的双人同步），永不同步、永不进入共享视图
 4. records/categories 都有 `id` / `updatedAt` —— 是双人同步的合并依据，改字段前必读计划文件
 5. 分类排序由 `lastUsedAt` 驱动（最近使用排前），这是"3 秒记账"的核心体验，不要改成固定排序
 6. 收支颜色遵循中式习惯：收入红、支出默认色；预算 80% 变黄、超支变红（口径在 `services/stats.budgetUsage`）
@@ -98,4 +98,4 @@ vite.config.js           # base './' + VitePWA(manifest + SW 离线缓存，buil
   （`{"app":"jizhang",...}`，需用户手势触发）；解析规则集中在 `services/entry.js` 纯函数层。
   **给用户看的配置手册见 `SHORTCUTS.md`**
 - ⬜ 下一步：GitHub Pages 部署、`webapp://` 拉起 PWA 的真机验证（未验证前推荐 URL 参数路径）
-- ⬜ 后期（Phase 3）：GitHub 私有仓库双人同步、三视角（我的/TA的/我们）、私密不上传
+- ⬜ 后期（Phase 3）：GitHub 私有仓库双人同步、三视角（各自/合并）、私密不上传
