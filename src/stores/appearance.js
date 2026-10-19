@@ -62,15 +62,18 @@ export const useAppearanceStore = defineStore('appearance', {
   actions: {
     /** IDB 真值 → 内存 / CSS / 镜像（启动与导入备份后各跑一次） */
     async load() {
-      const [intensity, dim] = await Promise.all([
-        settingsRepo.get(INTENSITY_KEY, 1),
-        settingsRepo.get(DIM_KEY, 0.3),
+      const [storedIntensity, storedDim] = await Promise.all([
+        settingsRepo.get(INTENSITY_KEY, null),
+        settingsRepo.get(DIM_KEY, null),
       ])
-      this.glassIntensity = clampIntensity(intensity)
-      this.glassDim = clampDim(dim)
+      this.glassIntensity = clampIntensity(storedIntensity === null ? 1 : storedIntensity)
+      this.glassDim = clampDim(storedDim === null ? 0.3 : storedDim)
       applyIntensity(this.glassIntensity)
       applyDim(this.glassDim)
       mirrorIntensity(this.glassIntensity)
+      // 首次启动落库默认值：保证导出白名单里有这两个键（无行时 get 回落）
+      if (storedIntensity === null) await settingsRepo.set(INTENSITY_KEY, this.glassIntensity)
+      if (storedDim === null) await settingsRepo.set(DIM_KEY, this.glassDim)
     },
 
     /** 用户意图写：持久化到 IDB + 镜像 + CSS */
