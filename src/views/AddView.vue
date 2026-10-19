@@ -1,18 +1,22 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCategoriesStore } from '@/stores/categories'
 import { useRecordsStore } from '@/stores/records'
+import { useAppearanceStore } from '@/stores/appearance'
+import { useImmersive } from '@/composables/useImmersive'
 import { toFen, fenToYuan, fenToInput, todayStr } from '@/utils/format'
 import { parseEntryQuery, parseEntryJson } from '@/services/entry'
 import AmountPad from '@/components/AmountPad.vue'
 import CategoryGrid from '@/components/CategoryGrid.vue'
 import GlassPanel from '@/components/GlassPanel.vue'
+import ImmersiveLayer from '@/components/ImmersiveLayer.vue'
 
 const route = useRoute()
 const router = useRouter()
 const categories = useCategoriesStore()
 const records = useRecordsStore()
+const appearance = useAppearanceStore()
 
 const type = ref('expense') // expense | income
 const buffer = ref('') // 金额输入缓冲（字符串，形如 "12.3"）
@@ -22,6 +26,48 @@ const date = ref(todayStr())
 const isPrivate = ref(false) // 私密账单：只存本地，永不同步（Phase 3 同步时跳过）
 const saving = ref(false) // 写库期间禁用 ✓，避免连点重复入账
 const toast = ref('')
+
+const {
+  state: immersiveState,
+  stream: immersiveStream,
+  parallax: immersiveParallax,
+  open: openImmersive,
+  close: closeImmersive,
+} = useImmersive({
+  onCameraError: () => {
+    // toast 点击即撤销上一笔；相机错误提示不应复用这个动作
+    lastSavedId = null
+    showToast('相机不可用，已退出沉浸背景')
+  },
+})
+
+const immersiveLabel = computed(() => {
+  if (immersiveState.value === 'requesting') return '启动中…'
+  if (immersiveState.value === 'closed') return '取景'
+  return '关闭'
+})
+
+function toggleImmersive() {
+  if (immersiveState.value === 'closed') openImmersive()
+  else closeImmersive()
+}
+
+// 场景联动只走 previewIntensity：临时偏移不写库，退出即恢复持久值
+watch(
+  immersiveState,
+  (next, prev) => {
+    if (next === prev) return
+    if (next === 'closed') appearance.previewIntensity(appearance.glassIntensity)
+    else if (prev === 'closed') {
+      appearance.previewIntensity(Math.max(0.3, appearance.glassIntensity - 0.25))
+    }
+  },
+  { flush: 'sync' },
+)
+
+onBeforeUnmount(() => {
+  appearance.previewIntensity(appearance.glassIntensity)
+})
 
 const cats = computed(() => (type.value === 'expense' ? categories.expense : categories.income))
 
@@ -196,6 +242,13 @@ async function undo() {
 
 <template>
   <div class="page add">
+    <ImmersiveLayer
+      v-if="immersiveState !== 'closed'"
+      :state="immersiveState"
+      :stream="immersiveStream"
+      :parallax="immersiveParallax"
+    />
+
     <!-- 收支切换 + 金额 -->
     <GlassPanel tier="clear" class="head card">
       <div class="seg">
@@ -220,6 +273,17 @@ async function undo() {
         @click="isPrivate = !isPrivate"
       >
         {{ isPrivate ? '🔒' : '🔓' }}
+      </button>
+      <button
+        class="immersive"
+        :class="{ on: immersiveState !== 'closed' }"
+        data-testid="immersive-toggle"
+        :title="immersiveState === 'closed' ? '开启沉浸背景' : '关闭沉浸背景'"
+        :aria-label="immersiveState === 'closed' ? '开启沉浸背景' : '关闭沉浸背景'"
+        :aria-busy="immersiveState === 'requesting'"
+        @click="toggleImmersive"
+      >
+        {{ immersiveLabel }}
       </button>
     </div>
 
@@ -337,6 +401,25 @@ async function undo() {
 
 .lock.on {
   opacity: 1;
+}
+
+.immersive {
+  flex: none;
+  min-width: 3.6em;
+  padding: 6px 9px;
+  border: 0.5px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.immersive.on {
+  border-color: var(--glass-edge);
+  background: rgba(255, 255, 255, .1);
+  color: var(--text);
 }
 
 .toast {
