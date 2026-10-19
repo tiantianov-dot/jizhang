@@ -22,7 +22,7 @@ export default defineConfig({
         lang: 'zh-CN',
         description: '极简功能不减，快速记账',
         theme_color: '#0f6e56',
-        background_color: '#ffffff',
+        background_color: '#141413',
         display: 'standalone',
         start_url: './',
         scope: './',

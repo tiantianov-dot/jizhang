@@ -1,0 +1,107 @@
+/* glass.css — 液态玻璃 Token 与全局底色（U1）
+ * Token 取自规格 §4.1 定稿；深色覆盖只在 html[data-glass='on'] 下生效，
+ * 删掉 data-glass 即回到 base.css 的原有深浅色体系。
+ */
+
+:root {
+  /* 全局玻璃质感强度：0.3~1.0，由设置页滑块控制，只改这一个变量 */
+  --glass-intensity: 1;
+
+  /* 光照方向全站统一：左上 135° */
+  --glass-highlight: linear-gradient(135deg,
+      rgba(255,255,255,.14), rgba(255,255,255,.04) 40%, transparent 60%);
+  --glass-edge: rgba(255,255,255,.10);        /* 1px 描边 */
+  --glass-shadow: 0 8px 24px rgba(0,0,0,.35),
+                  inset 0 1px 1px rgba(255,255,255,.08);
+
+  /* regular —— Tab Bar、日期胶囊、搜索框、普通卡片 */
+  --g-reg-bg:     color-mix(in srgb, rgba(30,30,34,.55)
+                  calc(var(--glass-intensity) * 100%), rgba(30,30,34,.15));
+  --g-reg-blur:   blur(calc(20px * var(--glass-intensity)))
+                  saturate(calc(1 + 0.6 * var(--glass-intensity)));
+  --g-reg-radius: 18px;
+
+  /* clear —— 余额卡、金额数字区（要可读性） */
+  --g-clr-bg:     color-mix(in srgb, rgba(24,24,28,.35)
+                  calc(var(--glass-intensity) * 100%), rgba(24,24,28,.10));
+  --g-clr-blur:   blur(calc(28px * var(--glass-intensity)))
+                  saturate(calc(1 + 0.8 * var(--glass-intensity)));
+  --g-clr-radius: 22px;
+
+  /* identity —— 确认键、记一笔 FAB（要「亮起来」） */
+  --g-id-bg:      rgba(52,199,123, calc(.28 * var(--glass-intensity) + .08));
+  --g-id-blur:    blur(calc(16px * var(--glass-intensity)))
+                  saturate(calc(1 + 1.1 * var(--glass-intensity)));
+  --g-id-radius:  999px;
+  --g-id-glow:    0 0 20px rgba(52,199,123,.35);
+}
+
+/* 玻璃主题强制深炭底；文字只留纯白 / .65 两档（规格 §4.3） */
+html[data-glass='on'] {
+  --bg: #141413;
+  --surface: #222221;
+  --text: #fff;
+  --text-secondary: rgba(255,255,255,.65);
+  --border: rgba(255,255,255,.14);
+  --expense: #f1efe8;
+  background-color: #141413;
+}
+
+html[data-glass='on'] body {
+  background: transparent;
+}
+
+/* 全站共用的缓慢流动渐变：独立合成层，只动 transform */
+html[data-glass='on'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(120% 90% at 20% 10%, #3a2b33 0%, transparent 55%),
+    radial-gradient(120% 100% at 85% 20%, #2a3b34 0%, transparent 60%),
+    radial-gradient(140% 120% at 50% 100%, #1c1b22 0%, transparent 70%),
+    #141413;
+  animation: glass-drift 90s linear infinite alternate;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+@keyframes glass-drift {
+  to { transform: translate3d(-3%, -2%, 0) scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-glass='on'] body::before {
+    animation: none;
+  }
+}
+
+/* 内容背板：rgba 模拟玻璃，不背 backdrop-filter */
+html[data-glass='on'] .card {
+  background-color: rgba(30,30,34,.45);
+  background-image: var(--glass-highlight);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--g-reg-radius);
+  box-shadow: var(--glass-shadow);
+}
+
+/* 列表行：零 backdrop-filter，后续批次直接挂 class */
+html[data-glass='on'] .glass-row {
+  background-color: rgba(255,255,255,.06);
+  background-image: var(--glass-highlight);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-shadow);
+}
+
+/* toast / 遮罩深色适配（scoped 原样式优先级更高，故带 html 前缀） */
+html[data-glass='on'] .toast {
+  background: rgba(30,30,34,.85);
+  border: 1px solid var(--glass-edge);
+  color: var(--text);
+  box-shadow: var(--glass-shadow);
+}
+
+html[data-glass='on'] .mask {
+  background: rgba(0,0,0,.45);
+}

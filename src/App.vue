@@ -14,6 +14,7 @@ const settings = useSettingsStore()
 const bootError = ref(false)
 
 onMounted(async () => {
+  document.documentElement.dataset.glass = 'on'
   try {
     await initDB()
     await Promise.all([categories.load(), records.load(), settings.load()])
