@@ -51,6 +51,8 @@ html[data-glass='on'] {
    * 注意 --danger 同时用于文字与预算条，填充型危险按钮改用固定深红（见各组件的 .warn）。 */
   --income: #ff8a8a;
   --danger: #ff6b6b;
+  /* 预算黄在真实玻璃背板上要 ≥4.5:1；深底用亮琥珀，浅色底仍走 base.css 原值 */
+  --warning: #ffb547;
   background-color: #141413;
 }
 
