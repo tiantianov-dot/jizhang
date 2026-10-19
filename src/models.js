@@ -4,7 +4,7 @@
  * 约定（不可破坏）：
  * - 金额一律以「分」存整数，3550 表示 ¥35.50，禁止浮点运算
  * - id / updatedAt / deleted 是后期双人同步的合并依据，字段名不可改
- * - private = true 的账目只存本地、永不同步（异地情侣防剧透）
+ * - private = true 的账目只存本地、永不参与将来的双人同步（防同步泄露）
  *
  * @typedef {Object} RecordItem 账目
  * @property {string}  id         uuid 主键
