@@ -85,5 +85,6 @@ defineProps({
   position: relative;
   z-index: 2;
   border-radius: inherit;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
 }
 </style>
