@@ -49,6 +49,35 @@ async function setLastBackupAtInDB(page, iso) {
   )
 }
 
+/** 通用：直接写/读 settings 表某一键（制造本地状态，绕过 UI） */
+async function setSettingInDB(page, key, value) {
+  return page.evaluate(
+    ([k, v]) =>
+      new Promise((resolve) => {
+        const req = indexedDB.open('jizhang', 1)
+        req.onsuccess = () => {
+          const tx = req.result.transaction('settings', 'readwrite')
+          tx.objectStore('settings').put({ key: k, value: v, updatedAt: Date.now() })
+          tx.oncomplete = () => resolve('ok')
+        }
+      }),
+    [key, value],
+  )
+}
+async function getSettingInDB(page, key) {
+  return page.evaluate(
+    (k) =>
+      new Promise((resolve) => {
+        const req = indexedDB.open('jizhang', 1)
+        req.onsuccess = () => {
+          const g = req.result.transaction('settings').objectStore('settings').get(k)
+          g.onsuccess = () => resolve(g.result ? g.result.value : null)
+        }
+      }),
+    key,
+  )
+}
+
 const daysAgoIso = (n) => {
   const d = new Date()
   d.setDate(d.getDate() - n)
@@ -132,33 +161,69 @@ const daysAgoIso = (n) => {
   const stat4 = await page.textContent('.bstat')
   check('3 天前 → 「上次备份：3 天前」', stat4.includes('3 天前'), stat4)
 
-  /* ---------- 6. 导入不算备份：导入成功后 lastBackupAt 不变 ---------- */
-  // 先导出一份拿到合法 payload，再改时间，再导入
+  /* ---------- 6. 导入语义：不回滚 lastBackupAt + 白名单按键过滤（含正向预言） ---------- */
+  // 导出前先写一个可识别的白名单键，保证备份文件里一定带上它
+  await setSettingInDB(page, 'ownerName', 'QA-EXPORT-NAME')
   const dl2Promise = page.waitForEvent('download', { timeout: 8000 })
   await page.click('button:has-text("导出 JSON")')
   const dl2 = await dl2Promise
   const payloadText = (await dl2.path()) ? require('fs').readFileSync(await dl2.path(), 'utf8') : null
   check('拿到导出 payload（供导入）', !!payloadText)
 
+  // 导出侧白名单实证（fail-closed 的前半边）
+  const payload = JSON.parse(payloadText)
+  const exportedKeys = (payload.settings || []).map((s) => s.key)
+  const WHITELIST = ['monthlyBudget', 'ownerName', 'uiGlassIntensity', 'uiGlassDim']
+  check('导出不含 lastBackupAt（设备本地备份状态不外发）', !exportedKeys.includes('lastBackupAt'), JSON.stringify(exportedKeys))
+  check('导出不含 syncConfig（将来放凭据也不会被打包外发）', !exportedKeys.includes('syncConfig'), JSON.stringify(exportedKeys))
+  check('导出 settings ⊆ 白名单四键', exportedKeys.every((k) => WHITELIST.includes(k)), JSON.stringify(exportedKeys))
+
   await setLastBackupAtInDB(page, daysAgoIso(20))
-  await reloadSettingsStore(page)
+  // 关键：本地把 ownerName 改成另一个值。若导入是「什么都不写」的空操作，
+  // 下面的正向断言就会红 —— 它给「不回滚 lastBackupAt」提供判别力，防弱预言。
+  await setSettingInDB(page, 'ownerName', 'QA-LOCAL-NEWER')
+  // 再往文件里塞两个白名单外键，验证导入是**按键过滤**而不是整包丢弃
+  payload.settings = [
+    ...(payload.settings || []),
+    { key: 'evilImportKey', value: 'should-be-dropped', updatedAt: Date.now() },
+    { key: 'syncConfig', value: { token: 'LEAK' }, updatedAt: Date.now() },
+  ]
   await page.setInputFiles('input[type=file]', {
     name: 'test.json',
     mimeType: 'application/json',
-    buffer: Buffer.from(payloadText),
+    buffer: Buffer.from(JSON.stringify(payload)),
   })
-  await page.waitForTimeout(500)
+  await page.waitForTimeout(600)
   const afterImport = await reloadSettingsStore(page)
   check('导入成功提示', (await page.textContent('.msg')).includes('导入完成'))
-  // 语义边界：导入 ≠ 备份。导入后 lastBackupAt 不应是「现在」；
-  // 它来自备份文件里的快照（本次 payload 导出时库里存的是 3 天前的值）——
-  // 恢复旧数据后提醒重新变黄，促使用户再备份一次，这是有益行为。
-  const restoredDate = daysAgoIso(3).slice(0, 10)
+
+  // ★正向预言：白名单键确实被文件值覆盖（证明导入干了活）
+  const ownerAfter = await getSettingInDB(page, 'ownerName')
+  check(
+    '★正向：白名单键 ownerName 被备份文件里的值覆盖（导入不是空操作）',
+    ownerAfter === 'QA-EXPORT-NAME',
+    `实际=${JSON.stringify(ownerAfter)}，期望=QA-EXPORT-NAME`,
+  )
+  // ★按键过滤（fail-closed 的后半边）
+  const evilAfter = await getSettingInDB(page, 'evilImportKey')
+  const syncAfter = await getSettingInDB(page, 'syncConfig')
+  check('★fail-closed：未知键 evilImportKey 没被导入落库', evilAfter === null, JSON.stringify(evilAfter))
+  check('★fail-closed：syncConfig 没被导入落库', syncAfter === null, JSON.stringify(syncAfter))
+
+  // 语义边界（U4 起，口径已变更）：settings 走键白名单，`lastBackupAt` **不在白名单内**，
+  // 因此它既不进导出也不进导入 —— 导入后必须保持「导入前的本地值」（本脚本设为 20 天前）。
+  // 旧语义「导入后 lastBackupAt 变成备份文件里的快照（3 天前）」已作废：
+  // 那等于让一次恢复动作把设备的备份提醒回滚，同步语义下还会互相压制提醒。
+  const snapshotDate = daysAgoIso(3).slice(0, 10)
+  const localDate = daysAgoIso(20).slice(0, 10)
   const todayDate = new Date().toISOString().slice(0, 10)
   check(
-    '导入不把本次导入记为备份（lastBackupAt 来自备份文件而非现在）',
-    afterImport && afterImport.slice(0, 10) === restoredDate && restoredDate !== todayDate,
-    `afterImport=${afterImport}`,
+    '导入不回滚 lastBackupAt（白名单外键：保持导入前的本地 20 天前，既不快照也不现在）',
+    !!afterImport &&
+      afterImport.slice(0, 10) === localDate &&
+      afterImport.slice(0, 10) !== snapshotDate &&
+      afterImport.slice(0, 10) !== todayDate,
+    `afterImport=${afterImport}，期望本地=${localDate}，快照=${snapshotDate}，今天=${todayDate}`,
   )
 
   await browser.close()
