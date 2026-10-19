@@ -1,17 +1,61 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useRecordsStore } from '@/stores/records'
 import { useCategoriesStore } from '@/stores/categories'
+import { useAppearanceStore } from '@/stores/appearance'
 import { toFen, stampNow, daysSince } from '@/utils/format'
 import * as backup from '@/repositories/backup'
+import GlassPanel from '@/components/GlassPanel.vue'
 
 const settings = useSettingsStore()
 const records = useRecordsStore()
 const categories = useCategoriesStore()
+const appearance = useAppearanceStore()
 
 const budgetInput = ref('')
 const msg = ref('')
+
+/* ---------- 外观：滑块值跟随 store；拖动只 preview，松手才持久化 ---------- */
+
+const intensity = ref(1)
+const dim = ref(0.3)
+const intensityPct = computed(() => Math.round(intensity.value * 100))
+const dimPct = computed(() => Math.round(dim.value * 100))
+
+watch(
+  () => appearance.glassIntensity,
+  (v) => {
+    intensity.value = v
+  },
+  { immediate: true },
+)
+
+watch(
+  () => appearance.glassDim,
+  (v) => {
+    dim.value = v
+  },
+  { immediate: true },
+)
+
+function onIntensityInput() {
+  appearance.previewIntensity(intensity.value)
+}
+
+async function commitIntensity() {
+  await appearance.setIntensity(intensity.value)
+  intensity.value = appearance.glassIntensity
+}
+
+function onDimInput() {
+  appearance.previewDim(dim.value)
+}
+
+async function commitDim() {
+  await appearance.setDim(dim.value)
+  dim.value = appearance.glassDim
+}
 
 async function saveBudget() {
   const fen = toFen(budgetInput.value || '0')
@@ -73,7 +117,7 @@ async function doImport(e) {
   try {
     const payload = JSON.parse(await file.text())
     const { added, updated } = await backup.importMerge(payload)
-    await Promise.all([records.load(), categories.load(), settings.load()])
+    await Promise.all([records.load(), categories.load(), settings.load(), appearance.load()])
     msg.value = `导入完成：新增 ${added} 条，更新 ${updated} 条`
   } catch (err) {
     msg.value = `导入失败：${err.message}`
@@ -95,6 +139,62 @@ async function doImport(e) {
       <div class="row">
         <input v-model="budgetInput" class="input" type="number" inputmode="decimal" placeholder="输入金额（元），0 = 取消" />
         <button class="btn" @click="saveBudget">保存</button>
+      </div>
+    </div>
+
+    <div class="card block">
+      <div class="row"><span>外观</span></div>
+
+      <!-- 实时预览：垫一层高对比渐变，拖动滑块时材质变化立刻可见 -->
+      <div class="preview" data-testid="glass-preview">
+        <div class="preview-bg"></div>
+        <GlassPanel tier="regular" class="preview-glass">
+          <div class="preview-inner">
+            <span class="preview-dot"></span>
+            <span class="preview-label">¥ 34.00</span>
+            <span class="preview-tag">实时预览</span>
+          </div>
+        </GlassPanel>
+      </div>
+
+      <div class="slider">
+        <div class="slider-head">
+          <span>质感</span>
+          <span class="cur">{{ intensityPct }}%</span>
+        </div>
+        <input
+          v-model.number="intensity"
+          class="range"
+          type="range"
+          min="0.3"
+          max="1"
+          step="0.05"
+          data-testid="glass-intensity-slider"
+          aria-label="玻璃质感强度"
+          @input="onIntensityInput"
+          @change="commitIntensity"
+        />
+        <div class="slider-scale"><span>通透</span><span>浓郁</span></div>
+      </div>
+
+      <div class="slider">
+        <div class="slider-head">
+          <span>背景压暗</span>
+          <span class="cur">{{ dimPct }}%</span>
+        </div>
+        <input
+          v-model.number="dim"
+          class="range"
+          type="range"
+          min="0"
+          max="0.6"
+          step="0.05"
+          data-testid="glass-dim-slider"
+          aria-label="背景压暗"
+          @input="onDimInput"
+          @change="commitDim"
+        />
+        <div class="slider-scale"><span>不压暗</span><span>最深</span></div>
       </div>
     </div>
 
@@ -159,6 +259,92 @@ async function doImport(e) {
 .cur {
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+/* ---------- 外观：实时预览 + 两条独立滑块 ---------- */
+
+.preview {
+  position: relative;
+  height: 84px;
+  margin: 6px 0 12px;
+  border-radius: 16px;
+}
+
+.preview-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 130% at 15% 20%, #d85a30 0%, transparent 55%),
+    radial-gradient(110% 120% at 85% 25%, #185fa5 0%, transparent 60%),
+    radial-gradient(140% 120% at 50% 110%, #0f6e56 0%, transparent 70%),
+    #2a2a30;
+}
+
+.preview-glass {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 18px;
+  bottom: 18px;
+  border-radius: 999px;
+}
+
+.preview-glass :deep(.gp-content) {
+  height: 100%;
+}
+
+.preview-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding: 0 16px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: 0 0 8px var(--brand);
+}
+
+.preview-label {
+  font-weight: 600;
+}
+
+.preview-tag {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.slider {
+  padding: 6px 0;
+}
+
+.slider-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.range {
+  width: 100%;
+  margin: 6px 0 2px;
+  accent-color: var(--brand);
+}
+
+.slider-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 /* 备份健康度三态 */

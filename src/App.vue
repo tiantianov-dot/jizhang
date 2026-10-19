@@ -4,11 +4,13 @@ import { initDB } from '@/db'
 import { useCategoriesStore } from '@/stores/categories'
 import { useRecordsStore } from '@/stores/records'
 import { useSettingsStore } from '@/stores/settings'
+import { useAppearanceStore } from '@/stores/appearance'
 import TabBar from '@/components/TabBar.vue'
 
 const categories = useCategoriesStore()
 const records = useRecordsStore()
 const settings = useSettingsStore()
+const appearance = useAppearanceStore()
 
 /** IndexedDB 初始化失败（无痕模式/存储被禁用）时展示兜底说明，而不是白屏 */
 const bootError = ref(false)
@@ -17,7 +19,7 @@ onMounted(async () => {
   document.documentElement.dataset.glass = 'on'
   try {
     await initDB()
-    await Promise.all([categories.load(), records.load(), settings.load()])
+    await Promise.all([categories.load(), records.load(), settings.load(), appearance.load()])
   } catch (err) {
     console.error('[jizhang] initDB failed:', err)
     bootError.value = true

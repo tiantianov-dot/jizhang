@@ -1,0 +1,100 @@
+/**
+ * stores/appearance.js — 外观偏好（质感强度 / 背景压暗）
+ *
+ * IndexedDB 是唯一真相源；localStorage 只存强度镜像，供 main.js 首帧防闪。
+ * previewIntensity / previewDim 只改 CSS 变量，不持久化 —— U5 场景联动专用。
+ */
+import { defineStore } from 'pinia'
+import * as settingsRepo from '@/repositories/settings'
+
+const INTENSITY_KEY = 'uiGlassIntensity'
+const DIM_KEY = 'uiGlassDim'
+const MIRROR_KEY = 'jizhang:uiGlassIntensity'
+
+const INTENSITY_MIN = 0.3
+const INTENSITY_MAX = 1
+const DIM_MIN = 0
+const DIM_MAX = 0.6
+const REDUCED_MIN = 0.7
+
+function prefersReducedTransparency() {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-transparency: reduce)').matches
+  )
+}
+
+export function clampIntensity(v) {
+  const n = Number(v)
+  const base = Number.isFinite(n)
+    ? Math.min(INTENSITY_MAX, Math.max(INTENSITY_MIN, n))
+    : 1
+  return prefersReducedTransparency() ? Math.max(REDUCED_MIN, base) : base
+}
+
+export function clampDim(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.min(DIM_MAX, Math.max(DIM_MIN, n)) : 0.3
+}
+
+function applyIntensity(v) {
+  document.documentElement.style.setProperty('--glass-intensity', String(v))
+}
+
+function applyDim(v) {
+  document.documentElement.style.setProperty('--glass-dim', String(v))
+}
+
+function mirrorIntensity(v) {
+  try {
+    localStorage.setItem(MIRROR_KEY, String(v))
+  } catch {
+    // 无痕模式等场景 localStorage 不可用：保持 IDB 真源即可
+  }
+}
+
+export const useAppearanceStore = defineStore('appearance', {
+  state: () => ({
+    glassIntensity: 1,
+    glassDim: 0.3,
+  }),
+  actions: {
+    /** IDB 真值 → 内存 / CSS / 镜像（启动与导入备份后各跑一次） */
+    async load() {
+      const [intensity, dim] = await Promise.all([
+        settingsRepo.get(INTENSITY_KEY, 1),
+        settingsRepo.get(DIM_KEY, 0.3),
+      ])
+      this.glassIntensity = clampIntensity(intensity)
+      this.glassDim = clampDim(dim)
+      applyIntensity(this.glassIntensity)
+      applyDim(this.glassDim)
+      mirrorIntensity(this.glassIntensity)
+    },
+
+    /** 用户意图写：持久化到 IDB + 镜像 + CSS */
+    async setIntensity(v) {
+      this.glassIntensity = clampIntensity(v)
+      applyIntensity(this.glassIntensity)
+      mirrorIntensity(this.glassIntensity)
+      await settingsRepo.set(INTENSITY_KEY, this.glassIntensity)
+    },
+
+    /** 场景态写：只设 CSS 变量，不写 IDB / 镜像（U5 沉浸模式用） */
+    previewIntensity(v) {
+      applyIntensity(clampIntensity(v))
+    },
+
+    async setDim(v) {
+      this.glassDim = clampDim(v)
+      applyDim(this.glassDim)
+      await settingsRepo.set(DIM_KEY, this.glassDim)
+    },
+
+    /** 背景压暗的临时预览（同样不持久化） */
+    previewDim(v) {
+      applyDim(clampDim(v))
+    },
+  },
+})
