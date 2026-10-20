@@ -15,6 +15,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icons/apple-touch-icon.png'],
+      workbox: {
+        // vite-plugin-pwa@2 默认 glob 不收 webp，星野图必须显式纳入 precache
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+      },
       manifest: {
         name: '极简记账',
         short_name: '记账',

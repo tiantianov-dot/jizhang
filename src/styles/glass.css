@@ -85,6 +85,10 @@ html[data-glass='on'] {
 html[data-glass='on'][data-polarity='light'] {
   --brand: #4b515a;
   --brand-strong: #2c3037;
+  /* 亮极性语义色：同色相加深，按亮背板 p50=0.7369 反算 ≥4.5:1 */
+  --income: #9a2222;
+  --danger: #8a1c1c;
+  --warning: #744a00;
 }
 
 html[data-glass='on'] body {
@@ -114,6 +118,11 @@ html[data-glass='on'] body::after {
   z-index: -3;
   background: rgba(var(--scrim-rgb), var(--glass-dim));
   pointer-events: none;
+}
+
+/* 亮极性：scrim 至少 .2，避免 dim=0 时亮底直接烧掉文字对比 */
+html[data-glass='on'][data-polarity='light'] body::after {
+  background: rgba(var(--scrim-rgb), max(.2, var(--glass-dim)));
 }
 
 /* 星点闪烁：只动 opacity；取消 90s 漂移（R4） */

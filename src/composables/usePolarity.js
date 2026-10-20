@@ -34,12 +34,14 @@ function writeMirror(polarity) {
   }
 }
 
-function currentPolarity() {
-  return document.documentElement.dataset.polarity === 'light' ? 'light' : 'dark'
-}
-
 function applyPolarity(polarity) {
   document.documentElement.dataset.polarity = polarity
+}
+
+/** 沉浸 live/idle 时相机画面恒暗，只读 DOM 状态，不碰 useImmersive */
+function immersivePinned() {
+  const state = document.querySelector('.immersive[data-state]')?.dataset.state
+  return state === 'live' || state === 'idle'
 }
 
 function backgroundUrl() {
@@ -69,7 +71,15 @@ function sampleImage(img) {
 export function usePolarity() {
   let timer = 0
   let observer = null
+  let immersiveObserver = null
   let runId = 0
+  let detected = DEFAULT_POLARITY
+  let wasPinned = false
+
+  /** 展示极性：沉浸 live/idle 钉死 dark，closed 用检测值 */
+  function applyEffective() {
+    applyPolarity(immersivePinned() ? 'dark' : detected)
+  }
 
   async function analyze(url = backgroundUrl()) {
     if (!url) return
@@ -77,11 +87,12 @@ export function usePolarity() {
     try {
       const img = await loadImage(url)
       if (seq !== runId) return
-      const next = classifyPolarity(highlightLuminance(sampleImage(img)), currentPolarity())
-      if (next !== currentPolarity()) {
-        applyPolarity(next)
+      const next = classifyPolarity(highlightLuminance(sampleImage(img)), detected)
+      if (next !== detected) {
+        detected = next
         writeMirror(next)
       }
+      applyEffective()
     } catch {
       // 解码失败保持当前极性，不静默把文字切换成不可读的一档
     }
@@ -93,19 +104,33 @@ export function usePolarity() {
   }
 
   onMounted(() => {
-    const mirror = readMirror()
-    applyPolarity(mirror || DEFAULT_POLARITY)
+    detected = readMirror() || DEFAULT_POLARITY
+    wasPinned = immersivePinned()
+    applyEffective()
     analyze()
     observer = new MutationObserver(scheduleAnalyze)
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['style', 'data-bg'],
     })
+    immersiveObserver = new MutationObserver(() => {
+      const pinned = immersivePinned()
+      if (pinned === wasPinned) return
+      wasPinned = pinned
+      applyEffective()
+    })
+    immersiveObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-state'],
+    })
   })
 
   onUnmounted(() => {
     clearTimeout(timer)
     observer?.disconnect()
+    immersiveObserver?.disconnect()
   })
 
   return { analyze }
