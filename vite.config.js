@@ -17,7 +17,7 @@ export default defineConfig({
       includeAssets: ['favicon.ico', 'icons/apple-touch-icon.png'],
       workbox: {
         // vite-plugin-pwa@2 默认 glob 不收 webp，星野图必须显式纳入 precache
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+        globPatterns: ['**/*.{js,css,html,webp}'],
       },
       manifest: {
         name: '极简记账',
