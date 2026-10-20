@@ -6,11 +6,12 @@
 > | 项 | 原计划 | 实际落地 |
 > | --- | --- | --- |
 > | 技术栈 | 原生 HTML+CSS+JS，无构建 | **Vue 3 + Vite + Pinia + vue-router(hash) + vite-plugin-pwa**（JS 非 TS） |
-> | 托管 | GitHub Pages | **WorkBuddy Sites**（真实站点地址不写入本公开仓库，由使用者自行保管并填入 `SHORTCUTS.md` 的 `<你的站点地址>`）；GitHub Pages 仍可作备选（vite base 已设 './'） |
+> | 托管 | GitHub Pages | **WorkBuddy Sites**（现网；真实站点地址不写入本公开仓库，由使用者自行保管并填入 `SHORTCUTS.md` 的 `<你的站点地址>`）**+ GitHub Pages 镜像**（`gh-pages` 已上线，入口为 `assets/index-<hash>.js` 哈希产物，根目录带 `.nojekyll`） |
 > | 图表 | Chart.js CDN 或自绘 SVG | **手写 SVG**（DonutChart / BarChart，零依赖） |
 > | 入口通道 A | `webapp://` 带参拉起 PWA | **仍未真机验证**，主推 URL 参数（`#/add?...`）+ 剪贴板 JSON 兜底 |
 > | 快捷指令 | 四条捷径 | 已跑通**截图 OCR 链路**（截屏 → 提取文本 → 正则金额 → 弹窗选金额 → autosave 入账），详见 `SHORTCUTS.md` |
 > | 新增（计划未含） | — | autosave 自动入账+4秒撤销、OCR 脏金额清洗（`services/entry.js` 的 `cleanAmount`） |
+> | 外观与材质（计划未含） | — | **液态玻璃 V4 收口**：强制深色、三档材质（regular/clear/identity）、质感与背景压暗两条滑块（持久化）、背景自适应极性（32×32 降采样 + p88 亮度 + `.45/.32` 迟滞）、深空星野默认背景（静态图 + 星点闪烁，**无漂移**）、自定义背景上传（图片/GIF ≤8 MB、视频 ≤30 MB，OPFS 存字节、**不进备份**、换机回落星空）、沉浸取景与 L2 背景镜像仅限记一笔页。维护口径见 README「外观与材质」 |
 >
 > 阅读建议：先读 README.md（当前真实架构与约定），再回看本文件理解「为什么这么设计」。
 
@@ -57,6 +58,8 @@
 - `records`：`{ id(uuid), amount(分,整数), type(expense|income), categoryId, note, date(YYYY-MM-DD), createdAt, updatedAt, deleted(false), private(false) }`
 - `categories`：`{ id, name, emoji, color, monthlyBudget(分, 0=不设), order, archived, lastUsedAt }`
 - `settings`：`{ monthlyBudget, ownerName, partnerName?, syncConfig?（预留） }`
+  —— 外观落地后另含 `uiGlassIntensity` / `uiGlassDim`（进导出白名单）与 `uiBackground`（背景描述符，
+  素材字节在 OPFS；**不进备份**，换机回落星空）
 
 要点：
 
@@ -94,7 +97,8 @@ AI 接口预留：快捷指令里「解析」独立成块，后期可整块替�
 2. PWA 独立存储下 IndexedDB 的持久化表现（iOS 对长期未用的 Web App 有清理策略 → 导出备份必须显眼）
 3. PWA 内 `navigator.clipboard.readText` 的授权弹窗体验 —— **已验证可用**
 4. iOS「从图像提取文本」对微信/支付宝支付完成页的中文金额识别准确率 —— **已验证可用**
-5. GitHub Pages + manifest + sw 在 iOS 主屏幕的 standalone 全屏表现 —— **WorkBuddy Sites 下已验证**
+5. GitHub Pages + manifest + sw 在 iOS 主屏幕的 standalone 全屏表现 —— **WorkBuddy Sites 下已验证**；
+   GitHub Pages 镜像已上线（含 `.nojekyll`），**该镜像在 iPhone 主屏幕的 standalone 表现尚未真机验证**
 
 ## 参考项目
 
