@@ -7,7 +7,7 @@
  * 注意：lastBackupAt / 未来的 syncConfig（含凭据）永不进入导出文件，见 backup.js 白名单。
  */
 
-import { getOne, putOne } from '@/db'
+import { deleteOne, getOne, putOne } from '@/db'
 
 export async function get(key, fallback = null) {
   const row = await getOne('settings', key)
@@ -16,4 +16,8 @@ export async function get(key, fallback = null) {
 
 export async function set(key, value) {
   await putOne('settings', { key, value, updatedAt: Date.now() })
+}
+
+export async function remove(key) {
+  await deleteOne('settings', key)
 }

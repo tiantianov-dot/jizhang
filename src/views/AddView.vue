@@ -4,7 +4,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { useCategoriesStore } from '@/stores/categories'
 import { useRecordsStore } from '@/stores/records'
 import { useAppearanceStore } from '@/stores/appearance'
+import { useBackgroundStore } from '@/stores/background'
 import { useImmersive } from '@/composables/useImmersive'
+import { useBackgroundMirror } from '@/composables/useBackgroundMirror'
 import { toFen, fenToYuan, fenToInput, todayStr } from '@/utils/format'
 import { parseEntryQuery, parseEntryJson } from '@/services/entry'
 import AmountPad from '@/components/AmountPad.vue'
@@ -17,6 +19,7 @@ const router = useRouter()
 const categories = useCategoriesStore()
 const records = useRecordsStore()
 const appearance = useAppearanceStore()
+const background = useBackgroundStore()
 
 const type = ref('expense') // expense | income
 const buffer = ref('') // 金额输入缓冲（字符串，形如 "12.3"）
@@ -47,6 +50,13 @@ const immersiveLabel = computed(() => {
   return '关闭'
 })
 
+/** L2 只在沉浸关闭且背景是静态图/星空时挂载 */
+const mirrorOn = computed(
+  () => immersiveState.value === 'closed' && background.mirrorAllowed,
+)
+
+useBackgroundMirror()
+
 function toggleImmersive() {
   if (immersiveState.value === 'closed') openImmersive()
   else closeImmersive()
@@ -57,6 +67,7 @@ watch(
   immersiveState,
   (next, prev) => {
     if (next === prev) return
+    background.setSuspended(next !== 'closed')
     if (next === 'closed') appearance.previewIntensity(appearance.glassIntensity)
     else if (prev === 'closed') {
       appearance.previewIntensity(Math.max(0.3, appearance.glassIntensity - 0.25))
@@ -66,6 +77,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  background.setSuspended(false)
   appearance.previewIntensity(appearance.glassIntensity)
 })
 
@@ -250,7 +262,12 @@ async function undo() {
     />
 
     <!-- 收支切换 + 金额 -->
-    <GlassPanel tier="clear" class="head card">
+    <GlassPanel
+      tier="clear"
+      class="head card"
+      :mirror="mirrorOn"
+      mirror-name="head"
+    >
       <div class="seg">
         <button :class="{ on: type === 'expense' }" @click="switchType('expense')">支出</button>
         <button :class="{ on: type === 'income' }" @click="switchType('income')">收入</button>
@@ -288,7 +305,7 @@ async function undo() {
     </div>
 
     <!-- 数字键盘 -->
-    <AmountPad v-model:buffer="buffer" :saving="saving" @save="save" />
+    <AmountPad v-model:buffer="buffer" :saving="saving" :mirror="mirrorOn" @save="save" />
 
     <!-- 保存反馈：点击撤销 -->
     <button v-if="toast" class="toast" @click="undo">{{ toast }}</button>

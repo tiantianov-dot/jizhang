@@ -6,9 +6,15 @@
  * 原有选择器照常命中；slot 内部 DOM 不变。三层共用同一圆角，
  * 禁止 overflow:hidden（会让子层 backdrop-filter 在 iOS 上失效）。
  */
+import GlassMirror from './GlassMirror.vue'
+
 defineProps({
   /** regular | clear | identity */
   tier: { type: String, default: 'regular' },
+  /** 挂 L2 背景镜像（仅 Add 金额头卡与 ✓） */
+  mirror: { type: Boolean, default: false },
+  /** 镜像 testid 后缀：head | ok */
+  mirrorName: { type: String, default: '' },
 })
 </script>
 
@@ -16,6 +22,7 @@ defineProps({
   <div class="gp" :class="'gp-' + tier">
     <div class="gp-border" />
     <div class="gp-blur" />
+    <GlassMirror v-if="mirror" :name="mirrorName" />
     <div class="gp-ring" />
     <div class="gp-content"><slot /></div>
   </div>
@@ -42,6 +49,7 @@ defineProps({
 
 .gp {
   position: relative;
+  overflow: visible;
   border-radius: var(--gp-radius, var(--g-reg-radius));
 }
 

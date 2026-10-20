@@ -16,6 +16,8 @@ const props = defineProps({
   saving: { type: Boolean, default: false },
   /** ✓ 是否上 identity 真玻璃；编辑页按层预算关闭（arch ④：Edit 常驻仅 2 层） */
   identity: { type: Boolean, default: true },
+  /** ✓ 是否挂 L2 背景镜像（仅 Add 页） */
+  mirror: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:buffer', 'save'])
@@ -47,7 +49,7 @@ function press(key) {
       {{ k === 'back' ? '⌫' : k }}
     </button>
     <button class="key ok" :class="{ plain: !identity }" :disabled="saving" @click="emit('save')">
-      <GlassPanel v-if="identity" tier="identity" class="ok-panel">
+      <GlassPanel v-if="identity" tier="identity" class="ok-panel" :mirror="mirror" mirror-name="ok">
         <span class="ok-label">✓</span>
       </GlassPanel>
       <span v-else class="ok-label">✓</span>

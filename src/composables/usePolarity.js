@@ -5,6 +5,8 @@
  * 写 html[data-polarity]，以及订阅 --bg-image 变化后重算。
  * 背景变更的约定：把新的 --bg-image 写在 documentElement 的内联 style 上
  * （V4-2 的上传素材也走这条），MutationObserver 会重新分析。
+ * 视频模式由 data-bg='video'（loadeddata 后）触发一次帧采样；
+ * 沉浸挂起（data-bg-suspended）期间强制 dark 且不写镜像。
  */
 import { onMounted, onUnmounted } from 'vue'
 import {
@@ -44,6 +46,10 @@ function immersivePinned() {
   return state === 'live' || state === 'idle'
 }
 
+function isSuspended() {
+  return document.documentElement.hasAttribute('data-bg-suspended')
+}
+
 function backgroundUrl() {
   const raw = getComputedStyle(document.documentElement).getPropertyValue('--bg-image').trim()
   const match = /url\((['"]?)(.*?)\1\)/.exec(raw)
@@ -76,23 +82,37 @@ export function usePolarity() {
   let detected = DEFAULT_POLARITY
   let wasPinned = false
 
-  /** 展示极性：沉浸 live/idle 钉死 dark，closed 用检测值 */
+  /** 展示极性：沉浸挂起/live/idle 钉死 dark，其余用检测值 */
   function applyEffective() {
-    applyPolarity(immersivePinned() ? 'dark' : detected)
+    applyPolarity(isSuspended() || immersivePinned() ? 'dark' : detected)
+  }
+
+  function applyDetected(next) {
+    if (next !== detected) {
+      detected = next
+      writeMirror(next)
+    }
+    applyEffective()
   }
 
   async function analyze(url = backgroundUrl()) {
+    if (isSuspended()) return
+    if (document.documentElement.dataset.bg === 'video') {
+      const video = document.querySelector('[data-testid="bg-video"]')
+      if (!video || video.readyState < 2) return
+      try {
+        applyDetected(classifyPolarity(highlightLuminance(sampleImage(video)), detected))
+      } catch {
+        // 帧暂时不可读：保持当前极性，不连续分析
+      }
+      return
+    }
     if (!url) return
     const seq = ++runId
     try {
       const img = await loadImage(url)
-      if (seq !== runId) return
-      const next = classifyPolarity(highlightLuminance(sampleImage(img)), detected)
-      if (next !== detected) {
-        detected = next
-        writeMirror(next)
-      }
-      applyEffective()
+      if (seq !== runId || isSuspended()) return
+      applyDetected(classifyPolarity(highlightLuminance(sampleImage(img)), detected))
     } catch {
       // 解码失败保持当前极性，不静默把文字切换成不可读的一档
     }
@@ -108,10 +128,13 @@ export function usePolarity() {
     wasPinned = immersivePinned()
     applyEffective()
     analyze()
-    observer = new MutationObserver(scheduleAnalyze)
+    observer = new MutationObserver(() => {
+      applyEffective()
+      scheduleAnalyze()
+    })
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['style', 'data-bg'],
+      attributeFilter: ['style', 'data-bg', 'data-bg-suspended'],
     })
     immersiveObserver = new MutationObserver(() => {
       const pinned = immersivePinned()

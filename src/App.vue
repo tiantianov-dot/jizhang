@@ -5,13 +5,16 @@ import { useCategoriesStore } from '@/stores/categories'
 import { useRecordsStore } from '@/stores/records'
 import { useSettingsStore } from '@/stores/settings'
 import { useAppearanceStore } from '@/stores/appearance'
+import { useBackgroundStore } from '@/stores/background'
 import { usePolarity } from '@/composables/usePolarity'
 import TabBar from '@/components/TabBar.vue'
+import BackgroundLayer from '@/components/BackgroundLayer.vue'
 
 const categories = useCategoriesStore()
 const records = useRecordsStore()
 const settings = useSettingsStore()
 const appearance = useAppearanceStore()
+const background = useBackgroundStore()
 
 usePolarity()
 
@@ -41,7 +44,13 @@ const bootError = ref(false)
 onMounted(async () => {
   try {
     await initDB()
-    await Promise.all([categories.load(), records.load(), settings.load(), appearance.load()])
+    await Promise.all([
+      categories.load(),
+      records.load(),
+      settings.load(),
+      appearance.load(),
+      background.load(),
+    ])
   } catch (err) {
     console.error('[jizhang] initDB failed:', err)
     bootError.value = true
@@ -50,7 +59,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="starfield" aria-hidden="true">
+  <div v-if="background.starfieldVisible" class="starfield" aria-hidden="true">
     <i
       v-for="(s, i) in stars"
       :key="i"
@@ -75,8 +84,16 @@ onMounted(async () => {
     </div>
   </div>
   <template v-else>
+    <BackgroundLayer />
     <RouterView />
     <TabBar />
+    <button
+      v-if="background.notice"
+      class="toast bg-notice"
+      @click="background.notice = ''"
+    >
+      {{ background.notice }}
+    </button>
   </template>
 </template>
 
@@ -91,5 +108,14 @@ onMounted(async () => {
   font-size: 15px;
   font-weight: 600;
   margin: 0 0 8px;
+}
+
+.bg-notice {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
+  z-index: 30;
+  max-width: 86vw;
 }
 </style>

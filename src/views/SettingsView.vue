@@ -1,17 +1,20 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useRecordsStore } from '@/stores/records'
 import { useCategoriesStore } from '@/stores/categories'
 import { useAppearanceStore } from '@/stores/appearance'
+import { useBackgroundStore } from '@/stores/background'
 import { toFen, stampNow, daysSince } from '@/utils/format'
 import * as backup from '@/repositories/backup'
 import GlassPanel from '@/components/GlassPanel.vue'
+import bgStarfield from '@/assets/bg-starfield.webp'
 
 const settings = useSettingsStore()
 const records = useRecordsStore()
 const categories = useCategoriesStore()
 const appearance = useAppearanceStore()
+const background = useBackgroundStore()
 
 const budgetInput = ref('')
 const msg = ref('')
@@ -62,6 +65,42 @@ async function saveBudget() {
   await settings.setMonthlyBudget(fen)
   budgetInput.value = ''
   msg.value = fen > 0 ? '预算已保存' : '已取消预算'
+}
+
+/* ---------- 背景素材：懒挂载文件输入，选完即卸载 ---------- */
+
+const starfieldUrl = bgStarfield
+const pickerOpen = ref(false)
+const pickerEl = ref(null)
+
+const bgLabel = computed(() => {
+  if (background.kind === 'image') return '图片'
+  if (background.kind === 'gif') return 'GIF 动图'
+  if (background.kind === 'video') return '视频'
+  return '默认星空'
+})
+
+async function startPick() {
+  pickerOpen.value = true
+  await nextTick()
+  pickerEl.value?.click()
+}
+
+async function onBgPick(e) {
+  const file = e.target.files && e.target.files[0]
+  pickerOpen.value = false
+  if (!file) return
+  try {
+    await background.chooseFile(file)
+    msg.value = '背景已更新'
+  } catch (err) {
+    msg.value = err.message
+  }
+}
+
+async function removeBg() {
+  await background.remove()
+  msg.value = '已恢复默认星空'
 }
 
 /* ---------- 备份健康度：提醒只在「有数据」时出现，新用户不制造焦虑 ---------- */
@@ -199,6 +238,55 @@ async function doImport(e) {
     </div>
 
     <div class="card block">
+      <div class="row">
+        <span>背景素材</span>
+        <span class="cur">{{ bgLabel }}</span>
+      </div>
+      <div class="bg-preview" data-testid="bg-preview">
+        <video
+          v-if="background.kind === 'video'"
+          class="bg-preview-media"
+          data-testid="bg-preview-media"
+          :src="background.url"
+          muted
+          loop
+          playsinline
+          preload="metadata"
+        />
+        <img
+          v-else
+          class="bg-preview-media"
+          data-testid="bg-preview-media"
+          :src="background.kind === 'starfield' ? starfieldUrl : background.url"
+          alt=""
+        />
+      </div>
+      <div class="row">
+        <button class="btn" data-testid="bg-upload" @click="startPick">上传图片/视频</button>
+        <button
+          v-if="background.kind !== 'starfield'"
+          class="btn"
+          data-testid="bg-remove"
+          @click="removeBg"
+        >
+          恢复星空
+        </button>
+        <input
+          v-if="pickerOpen"
+          ref="pickerEl"
+          type="file"
+          accept="image/*,video/*"
+          hidden
+          @change="onBgPick"
+          @cancel="pickerOpen = false"
+        />
+      </div>
+      <p class="placeholder">
+        图片/GIF 最大 8 MB，视频最大 30 MB；素材只存本机，不进备份。
+      </p>
+    </div>
+
+    <div class="card block">
       <div class="row"><span>数据备份</span></div>
       <!-- 备份健康度：无账目不显示（nothing to back up），有账目按三态提醒 -->
       <div v-if="backupStatus !== 'none'" class="row bstat">
@@ -279,6 +367,22 @@ async function doImport(e) {
     radial-gradient(110% 120% at 85% 25%, #185fa5 0%, transparent 60%),
     radial-gradient(140% 120% at 50% 110%, #0f6e56 0%, transparent 70%),
     #2a2a30;
+}
+
+/* 背景预览卡：零 backdrop-filter、非 fixed（Settings 的 .gp-blur=2 是死断言） */
+.bg-preview {
+  height: 84px;
+  margin: 6px 0 10px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0a0e18;
+}
+
+.bg-preview-media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .preview-glass {
