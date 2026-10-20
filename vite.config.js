@@ -21,7 +21,7 @@ export default defineConfig({
         id: './',
         lang: 'zh-CN',
         description: '极简功能不减，快速记账',
-        theme_color: '#0f6e56',
+        theme_color: '#0a0e18',
         background_color: '#141413',
         display: 'standalone',
         start_url: './',

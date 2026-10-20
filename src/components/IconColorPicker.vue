@@ -80,7 +80,7 @@ const emojiText = computed({
 .input {
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--glass-hairline);
   border-radius: 8px;
   background: rgba(0, 0, 0, .22);
   color: var(--text);
@@ -112,7 +112,7 @@ const emojiText = computed({
 }
 
 .pick.on {
-  border-color: var(--brand);
+  border-color: var(--glass-edge-3);
 }
 
 .round {

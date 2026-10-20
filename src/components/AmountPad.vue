@@ -65,19 +65,25 @@ function press(key) {
 }
 
 .key {
-  /* 高亮背景下按键需保持白字 ≥4.5:1：alpha 吃独立压暗变量并内置下限 */
-  background-color: rgba(0, 0, 0, calc(.48 + var(--glass-dim)));
+  /* 键帽跟面板同一套极性感知填充；按压态不再用 alpha（dim=.6 会溢出成纯黑） */
+  background-color: rgba(var(--panel-fill-rgb), calc(.02 + .05 * var(--glass-intensity)));
   background-image: var(--glass-highlight);
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--glass-edge-2);
   border-radius: 10px;
-  color: var(--text);
+  color: var(--on-glass);
   font-size: 20px;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .75), 0 0 4px rgba(0, 0, 0, .45);
+  text-shadow: var(--on-glass-shadow);
 }
 
 .key:active {
-  background-color: rgba(0, 0, 0, calc(.60 + var(--glass-dim)));
+  filter: brightness(1.35);
+  transform: scale(.97);
+}
+
+/* ✓ 内嵌真玻璃，祖先加 filter 会让 backdrop-filter 失效，只保留按压缩放 */
+.key.ok:active {
+  filter: none;
 }
 
 .key:disabled {
@@ -92,7 +98,7 @@ function press(key) {
   padding: 0;
   border: none;
   background: none;
-  color: #fff;
+  color: var(--on-glass);
   font-size: 24px;
   font-weight: 600;
 }
@@ -110,14 +116,14 @@ function press(key) {
   height: 100%;
 }
 
-/* 编辑页的 ✓：保留绿色识别，但不加 backdrop-filter，守住 Edit 常驻 2 层预算；
-   底色用深绿板而非浅绿透明，白字在亮背景上仍可读 */
+/* 编辑页的 ✓：同中性玻璃档，不加 backdrop-filter，守住 Edit 常驻 2 层预算 */
 .key.ok.plain {
-  border: 1px solid rgba(52, 199, 123, .6);
+  border: 1px solid var(--glass-edge-3);
   border-radius: 10px;
-  background-color: rgba(9, 56, 34, .8);
-  box-shadow: 0 0 12px rgba(52, 199, 123, .18);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .75), 0 0 4px rgba(0, 0, 0, .45);
+  background-color: rgba(var(--panel-fill-rgb), calc(.05 + .12 * var(--glass-intensity)));
+  background-image: var(--glass-highlight);
+  box-shadow: var(--glass-shadow);
+  text-shadow: var(--on-glass-shadow);
 }
 
 /* ⌫ 提到最后一列第一格：调整键位顺序由 CSS grid auto-placement 处理 */

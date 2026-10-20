@@ -202,7 +202,7 @@ async function remove() {
 .input {
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--glass-hairline);
   border-radius: 8px;
   background: rgba(0, 0, 0, .22);
   color: var(--text);
@@ -218,11 +218,13 @@ async function remove() {
 
 .btn {
   flex: 1;
-  background: var(--brand);
-  color: #fff;
+  background: rgba(var(--panel-fill-rgb), calc(.08 + .10 * var(--glass-intensity)));
+  border: 1px solid var(--glass-edge-2);
+  color: var(--on-glass);
   font-size: 14px;
   padding: 10px 0;
   border-radius: 10px;
+  text-shadow: var(--on-glass-shadow);
 }
 
 .btn:disabled,
@@ -234,8 +236,9 @@ async function remove() {
   flex: none;
   width: 5em;
   background: rgba(0, 0, 0, .22);
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--glass-hairline);
   color: var(--text-secondary);
+  text-shadow: none;
 }
 
 .del {

@@ -389,7 +389,7 @@ async function doImport(e) {
 .input {
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--glass-hairline);
   border-radius: 8px;
   background: rgba(0, 0, 0, .22);
   color: var(--text);
@@ -399,16 +399,18 @@ async function doImport(e) {
 }
 
 .btn {
-  background: var(--brand);
-  color: #fff;
+  background: rgba(var(--panel-fill-rgb), calc(.08 + .10 * var(--glass-intensity)));
+  border: 1px solid var(--glass-edge-2);
+  color: var(--on-glass);
   font-size: 13px;
   padding: 8px 16px;
   border-radius: 8px;
   white-space: nowrap;
+  text-shadow: var(--on-glass-shadow);
 }
 
 .btn:active {
-  background: var(--brand-strong);
+  filter: brightness(1.25);
 }
 
 .msg {

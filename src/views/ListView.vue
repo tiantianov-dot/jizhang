@@ -251,7 +251,7 @@ onUnmounted(() => clearTimeout(undoTimer))
   height: 36px;
   border-radius: 8px;
   background: rgba(0, 0, 0, .22);
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--glass-hairline);
   color: var(--text);
   font-size: 18px;
   line-height: 1;
@@ -287,7 +287,7 @@ onUnmounted(() => clearTimeout(undoTimer))
   height: 36px;
   padding: 0 12px;
   border-radius: 8px;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--glass-hairline);
   background: rgba(0, 0, 0, .22);
   color: var(--text);
   font-size: 16px; /* ≥16px：防 iOS 聚焦输入框时页面自动放大 */
@@ -304,7 +304,7 @@ onUnmounted(() => clearTimeout(undoTimer))
   height: 36px;
   padding: 0 12px;
   border-radius: 8px;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--glass-hairline);
   background: rgba(0, 0, 0, .22);
   color: var(--text-secondary);
   font-size: 13px;
@@ -314,8 +314,8 @@ onUnmounted(() => clearTimeout(undoTimer))
 }
 
 .fbtn.on {
-  color: #fff;
-  border-color: rgba(52, 199, 123, .6);
+  color: var(--on-glass);
+  border-color: var(--glass-edge-3);
   font-weight: 600;
 }
 
@@ -341,7 +341,7 @@ onUnmounted(() => clearTimeout(undoTimer))
 }
 
 html[data-glass='on'] .rows {
-  background-color: rgba(30, 30, 34, .18);
+  background-color: rgba(var(--panel-fill-rgb), calc(.015 + .03 * var(--glass-intensity)));
 }
 
 .row {

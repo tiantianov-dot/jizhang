@@ -159,12 +159,12 @@ onUnmounted(() => {
 }
 
 .item.on {
-  border-color: var(--brand);
-  background: color-mix(in srgb, var(--brand) 14%, var(--surface));
+  border-color: var(--glass-edge-3);
+  background: rgba(var(--panel-fill-rgb), calc(.04 + .06 * var(--glass-intensity)));
 }
 
 .item.on .name {
-  color: #fff;
+  color: var(--on-glass);
   font-weight: 600;
 }
 </style>

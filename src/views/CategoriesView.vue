@@ -194,18 +194,18 @@ async function restore(c) {
 
 .act {
   font-size: 13px;
-  color: #fff;
+  color: var(--on-glass);
   padding: 8px 0 8px 10px;
 }
 
 .btn.add {
-  background: rgba(52, 199, 123, .12);
-  border: 1px dashed rgba(52, 199, 123, .55);
-  color: #fff;
+  background: rgba(var(--panel-fill-rgb), calc(.03 + .06 * var(--glass-intensity)));
+  border: 1px dashed var(--glass-edge-2);
+  color: var(--on-glass);
   font-size: 14px;
   padding: 10px 0;
   border-radius: 10px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+  text-shadow: var(--on-glass-shadow);
 }
 
 .toast {

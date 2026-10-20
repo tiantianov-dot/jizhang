@@ -195,7 +195,7 @@ const showBudgets = computed(
   height: 36px;
   border-radius: 8px;
   background: rgba(0, 0, 0, .22);
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--glass-hairline);
   color: var(--text);
   font-size: 18px;
   line-height: 1;

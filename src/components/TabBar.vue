@@ -69,7 +69,7 @@ const tabs = [
 }
 
 .tab.active {
-  color: #fff;
+  color: var(--on-glass);
   font-weight: 600;
 }
 </style>

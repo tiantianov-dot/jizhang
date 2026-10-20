@@ -1,115 +1,176 @@
-/* glass.css — 液态玻璃 Token 与全局底色（U1）
- * Token 取自规格 §4.1 定稿；深色覆盖只在 html[data-glass='on'] 下生效，
- * 删掉 data-glass 即回到 base.css 的原有深浅色体系。
+/* glass.css — 液态玻璃 Token 与全局底色（U1 / V4-1）
+ * Token 取自规格 §4.1 定稿；深色覆盖只在 html[data-glass='on'] 下生效。
+ * V4-1：面板填充改成极性感知微增光（零 alpha 下限），压暗只由全屏 scrim 承担。
  */
 
 :root {
-  /* 全局玻璃质感强度：0.3~1.0，由设置页滑块控制，只作用于 blur/saturate；不参与任何压暗计算 */
+  /* 全局玻璃质感强度：0.3~1.0，驱动 blur/saturate 与面板 alpha */
   --glass-intensity: 1;
 
-  /* 背景压暗：0~0.6，独立于玻璃强度；U5 沉浸模式单独调节 */
+  /* 背景压暗：0~0.6，只被全屏 scrim 与沉浸相机遮罩消费 */
   --glass-dim: .3;
 
-  /* 光照方向全站统一：左上 135° */
+  /* 光照方向全站统一：左上 135°（规格定稿 .14/.04） */
   --glass-highlight: linear-gradient(135deg,
-      rgba(255,255,255,.10), rgba(255,255,255,.03) 40%, transparent 60%);
-  --glass-edge: rgba(255,255,255,.10);        /* 1px 描边 */
+      rgba(255,255,255,.14), rgba(255,255,255,.04) 40%, transparent 60%);
+  /* 外投影 + L1 厚度内阴影 */
   --glass-shadow: 0 8px 24px rgba(0,0,0,.35),
-                  inset 0 1px 1px rgba(255,255,255,.08);
+                  inset 0 1px 1px rgba(255,255,255,.28),
+                  inset 0 -1px 1px rgba(0,0,0,.22),
+                  inset 0 0 12px rgba(255,255,255,.05);
 
-  /* 真玻璃背板：暗度只吃 --glass-dim（0~.6），并内置下限，保证高亮背景上白字可读。
-   * 默认 dim=.3 时 alpha：regular .67 / clear .61 / identity .65。 */
-  /* regular —— Tab Bar、日期胶囊、搜索框、普通卡片 */
-  --g-reg-bg:     rgba(30,30,34, calc(.58 + var(--glass-dim) * .3));
-  --g-reg-blur:   blur(calc(20px * var(--glass-intensity)))
-                  saturate(calc(1 + 0.6 * var(--glass-intensity)));
+  /* 小控件描边（不是 L1 亮环） */
+  --glass-hairline: rgba(255,255,255,.14);
+
+  /* ---- 极性四件套（默认暗极性；亮极性在 html[data-polarity='light'] 覆盖）---- */
+  --panel-fill-rgb: 255,255,255;          /* 暗底：受光 */
+  --scrim-rgb: 6,8,14;
+  --on-glass: rgba(255,255,255,.88);      /* 玻璃上的主文字 */
+  --on-glass-2: rgba(255,255,255,.65);    /* 次级文字：同色相降透明度 */
+  --on-glass-shadow: 0 1px 1px rgba(0,0,0,.75), 0 4px 12px rgba(0,0,0,.55);
+  /* L1 亮环三档：强边 / 过渡 / 右下回光（md 表 .50/.12/.40） */
+  --glass-edge: rgba(255,255,255,.50);
+  --glass-edge-2: rgba(255,255,255,.12);
+  --glass-edge-3: rgba(255,255,255,.40);
+
+  /* 三档面板填充：线性式、零 alpha 下限；blur/saturate/radius 沿用规格定值 */
+  --g-reg-bg: rgba(var(--panel-fill-rgb), calc(.03 + .09 * var(--glass-intensity)));
+  --g-reg-blur: blur(calc(20px * var(--glass-intensity)))
+                saturate(calc(1 + 0.6 * var(--glass-intensity)));
   --g-reg-radius: 18px;
 
-  /* clear —— 余额卡、金额数字区（要可读性） */
-  --g-clr-bg:     rgba(24,24,28, calc(.52 + var(--glass-dim) * .3));
-  --g-clr-blur:   blur(calc(28px * var(--glass-intensity)))
-                  saturate(calc(1 + 0.8 * var(--glass-intensity)));
+  --g-clr-bg: rgba(var(--panel-fill-rgb), calc(.02 + .05 * var(--glass-intensity)));
+  --g-clr-blur: blur(calc(28px * var(--glass-intensity)))
+                saturate(calc(1 + 0.8 * var(--glass-intensity)));
   --g-clr-radius: 22px;
 
-  /* identity —— 确认键、记一笔 FAB（要「亮起来」） */
-  --g-id-bg:      rgba(52,199,123, calc(.56 + var(--glass-dim) * .3));
-  --g-id-blur:    blur(calc(16px * var(--glass-intensity)))
-                  saturate(calc(1 + 1.1 * var(--glass-intensity)));
-  --g-id-radius:  999px;
-  --g-id-glow:    0 0 20px rgba(52,199,123,.35);
+  --g-id-bg: rgba(var(--panel-fill-rgb), calc(.05 + .12 * var(--glass-intensity)));
+  --g-id-blur: blur(calc(16px * var(--glass-intensity)))
+               saturate(calc(1 + 1.1 * var(--glass-intensity)));
+  --g-id-radius: 999px;
+  --g-id-glow: 0 0 20px rgba(255,255,255,.12);   /* 中性光晕，不带色相 */
 }
 
-/* 玻璃主题强制深炭底；文字只留纯白 / .65 两档（规格 §4.3） */
+/* 亮极性：面板从「受光」变「投影」，文字与阴影一起翻面 */
+html[data-polarity='light'] {
+  --panel-fill-rgb: 10,12,14;
+  --scrim-rgb: 246,248,250;
+  --on-glass: rgba(18,18,20,.82);
+  --on-glass-2: rgba(18,18,20,.62);
+  --on-glass-shadow: 0 1px 0 rgba(255,255,255,.6), 0 4px 14px rgba(255,255,255,.45);
+  --glass-edge: rgba(255,255,255,.92);
+  --glass-edge-2: rgba(255,255,255,.30);
+  --glass-edge-3: rgba(255,255,255,.78);
+  --glass-hairline: rgba(10,12,14,.16);
+}
+
+/* 玻璃主题强制深色底；文字与描边跟随极性 */
 html[data-glass='on'] {
-  --bg: #141413;
+  --bg: #0a0e18;
   --surface: #222221;
-  --text: #fff;
-  --text-secondary: rgba(255,255,255,.65);
-  --border: rgba(255,255,255,.14);
-  --expense: #f1efe8;
-  /* 深底语义色：收入/超支必须是亮色变体，否则对 #141413 只有 2.61:1。
-   * 注意 --danger 同时用于文字与预算条，填充型危险按钮改用固定深红（见各组件的 .warn）。 */
+  --text: var(--on-glass);
+  --text-secondary: var(--on-glass-2);
+  --border: var(--glass-hairline);
+  --expense: var(--on-glass);
+  /* 深底语义色（已签字）：#ff8a8a / #ff6b6b / #ffb547 */
   --income: #ff8a8a;
   --danger: #ff6b6b;
-  /* 预算黄在真实玻璃背板上要 ≥4.5:1；深底用亮琥珀，浅色底仍走 base.css 原值 */
   --warning: #ffb547;
-  background-color: #141413;
+  /* --brand 退出 UI 主色：滑块 accent / .btn / 选中态走中性玻璃档 */
+  --brand: #9aa3ad;
+  --brand-strong: #c2c9d2;
+  background-color: #0a0e18;
+}
+
+html[data-glass='on'][data-polarity='light'] {
+  --brand: #4b515a;
+  --brand-strong: #2c3037;
 }
 
 html[data-glass='on'] body {
   background: transparent;
 }
 
-/* 全站共用的缓慢流动渐变：独立合成层，只动 transform */
+/* 背景：--bg-image 由 main.js 注入（默认星野；上传素材走同一变量）。
+ * 纯色 #0a0e18 垫底，图未解码完也不白屏。 */
 html[data-glass='on'] body::before {
   content: '';
   position: fixed;
   inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(120% 90% at 20% 10%, #3a2b33 0%, transparent 55%),
-    radial-gradient(120% 100% at 85% 20%, #2a3b34 0%, transparent 60%),
-    radial-gradient(140% 120% at 50% 100%, #1c1b22 0%, transparent 70%),
-    #141413;
-  animation: glass-drift 90s linear infinite alternate;
-  will-change: transform;
-  transform: translateZ(0);
+  z-index: -4;
+  background-color: #0a0e18;
+  background-image: var(--bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
 }
 
-@keyframes glass-drift {
-  to { transform: translate3d(-3%, -2%, 0) scale(1.06); }
+/* 全屏 scrim：唯一消费 --glass-dim 的页面层（相机遮罩另见 ImmersiveLayer） */
+html[data-glass='on'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  background: rgba(var(--scrim-rgb), var(--glass-dim));
+  pointer-events: none;
+}
+
+/* 星点闪烁：只动 opacity；取消 90s 漂移（R4） */
+html[data-glass='on'] .starfield {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+html[data-glass='on'] .starfield i {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(255,255,255,.75);
+  opacity: .45;
+  animation: star-twinkle var(--star-dur, 4s) ease-in-out infinite alternate;
+  animation-delay: var(--star-delay, 0s);
+}
+
+@keyframes star-twinkle {
+  from { opacity: .15; }
+  to { opacity: .8; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html[data-glass='on'] body::before {
+  html[data-glass='on'] .starfield i {
     animation: none;
+    opacity: .45;
   }
 }
 
-/* 内容背板：rgba 模拟玻璃，不背 backdrop-filter；压暗只吃 --glass-dim */
+/* 内容背板：零 backdrop-filter；填充只吃 --panel-fill-rgb + intensity */
 html[data-glass='on'] .card {
-  background-color: rgba(30,30,34, calc(.32 + var(--glass-dim)));
+  background-color: rgba(var(--panel-fill-rgb), calc(.03 + .09 * var(--glass-intensity)));
   background-image: var(--glass-highlight);
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--glass-edge-2);
   border-radius: var(--g-reg-radius);
   box-shadow: var(--glass-shadow);
-  text-shadow: 0 1px 2px rgba(0,0,0,.45);
+  text-shadow: var(--on-glass-shadow);
 }
 
-/* 列表行：零 backdrop-filter；压暗板 + 文字阴影，保证亮背景上可读 */
+/* 列表行：零 backdrop-filter；与面板同一套填充与极性文字 */
 html[data-glass='on'] .glass-row {
-  background-color: rgba(0,0,0, calc(.25 + var(--glass-dim)));
+  background-color: rgba(var(--panel-fill-rgb), calc(.03 + .09 * var(--glass-intensity)));
   background-image: var(--glass-highlight);
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--glass-edge-2);
   box-shadow: var(--glass-shadow);
-  text-shadow: 0 1px 2px rgba(0,0,0,.5);
+  text-shadow: var(--on-glass-shadow);
 }
 
-/* toast / 遮罩深色适配（scoped 原样式优先级更高，故带 html 前缀） */
+/* toast 是独立深色胶囊，不跟极性翻面，避免深底黑字 */
 html[data-glass='on'] .toast {
-  background: rgba(30,30,34,.85);
-  border: 1px solid var(--glass-edge);
-  color: var(--text);
+  background: rgba(20,20,19,.92);
+  border: 1px solid var(--glass-hairline);
+  color: #f1efe8;
   box-shadow: var(--glass-shadow);
 }
 

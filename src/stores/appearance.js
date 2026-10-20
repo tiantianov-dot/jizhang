@@ -16,12 +16,13 @@ const INTENSITY_MAX = 1
 const DIM_MIN = 0
 const DIM_MAX = 0.6
 const REDUCED_MIN = 0.7
+const CONTRAST_MIN = 0.85
 
-function prefersReducedTransparency() {
+function matchesMedia(query) {
   return (
     typeof window !== 'undefined' &&
     typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-transparency: reduce)').matches
+    window.matchMedia(query).matches
   )
 }
 
@@ -30,7 +31,9 @@ export function clampIntensity(v) {
   const base = Number.isFinite(n)
     ? Math.min(INTENSITY_MAX, Math.max(INTENSITY_MIN, n))
     : 1
-  return prefersReducedTransparency() ? Math.max(REDUCED_MIN, base) : base
+  if (matchesMedia('(prefers-contrast: more)')) return Math.max(CONTRAST_MIN, base)
+  if (matchesMedia('(prefers-reduced-transparency: reduce)')) return Math.max(REDUCED_MIN, base)
+  return base
 }
 
 export function clampDim(v) {

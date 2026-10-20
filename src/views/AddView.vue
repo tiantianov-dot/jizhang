@@ -390,7 +390,7 @@ async function undo() {
 }
 
 .paste:active {
-  background: var(--bg);
+  background: rgba(var(--panel-fill-rgb), .08);
 }
 
 .lock {
@@ -417,8 +417,8 @@ async function undo() {
 }
 
 .immersive.on {
-  border-color: var(--glass-edge);
-  background: rgba(255, 255, 255, .1);
+  border-color: var(--glass-edge-3);
+  background: rgba(var(--panel-fill-rgb), calc(.04 + .06 * var(--glass-intensity)));
   color: var(--text);
 }
 
