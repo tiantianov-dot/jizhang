@@ -173,10 +173,11 @@ const daysAgoIso = (n) => {
   // 导出侧白名单实证（fail-closed 的前半边）
   const payload = JSON.parse(payloadText)
   const exportedKeys = (payload.settings || []).map((s) => s.key)
-  const WHITELIST = ['monthlyBudget', 'ownerName', 'uiGlassIntensity', 'uiGlassDim']
+  const WHITELIST = ['monthlyBudget', 'ownerName', 'uiGlassIntensity', 'uiGlassFill']
   check('导出不含 lastBackupAt（设备本地备份状态不外发）', !exportedKeys.includes('lastBackupAt'), JSON.stringify(exportedKeys))
   check('导出不含 syncConfig（将来放凭据也不会被打包外发）', !exportedKeys.includes('syncConfig'), JSON.stringify(exportedKeys))
   check('导出 settings ⊆ 白名单四键', exportedKeys.every((k) => WHITELIST.includes(k)), JSON.stringify(exportedKeys))
+  check('导出不含 uiGlassDim（V5 §8.1.1 已删 dim，四键之外的外观键永不外发）', !exportedKeys.includes('uiGlassDim'), JSON.stringify(exportedKeys))
 
   await setLastBackupAtInDB(page, daysAgoIso(20))
   // 关键：本地把 ownerName 改成另一个值。若导入是「什么都不写」的空操作，
