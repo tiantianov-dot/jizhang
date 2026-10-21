@@ -8,6 +8,7 @@ import { useBackgroundStore } from '@/stores/background'
 import { toFen, stampNow, daysSince } from '@/utils/format'
 import * as backup from '@/repositories/backup'
 import GlassPanel from '@/components/GlassPanel.vue'
+import { coverRequirement } from '@/services/background'
 import { drawStarfield } from '@/services/starfield'
 
 const settings = useSettingsStore()
@@ -91,10 +92,29 @@ watch(
 )
 
 const bgLabel = computed(() => {
+  if (background.blocked) return '分辨率不足，已停用'
   if (background.kind === 'image') return '图片'
   if (background.kind === 'gif') return 'GIF 动图'
   if (background.kind === 'video') return '视频'
   return '默认星空'
+})
+
+const bgDims = computed(() => {
+  const d = background.descriptor
+  if (!d || !Number.isInteger(d.width) || !Number.isInteger(d.height)) return ''
+  if (d.width <= 0 || d.height <= 0) return ''
+  return `当前素材 ${d.width}×${d.height} 物理像素`
+})
+
+const bgRequirement = coverRequirement({
+  innerWidth: window.innerWidth,
+  innerHeight: window.innerHeight,
+  dpr: window.devicePixelRatio,
+  screenW: window.screen && window.screen.width,
+  screenH: window.screen && window.screen.height,
+  coarse:
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: coarse)').matches,
 })
 
 async function startPick() {
@@ -257,6 +277,7 @@ async function doImport(e) {
         <span>背景素材</span>
         <span class="cur">{{ bgLabel }}</span>
       </div>
+      <p v-if="bgDims" class="placeholder">{{ bgDims }}</p>
       <div class="bg-preview" data-testid="bg-preview">
         <canvas
           v-if="background.kind === 'starfield'"
@@ -282,10 +303,11 @@ async function doImport(e) {
           alt=""
         />
       </div>
+      <p v-if="background.blocked" class="bg-warn">分辨率不足（{{ background.blocked.width }}×{{ background.blocked.height }}），已暂用星空；请恢复星空后重新上传。</p>
       <div class="row">
         <button class="btn" data-testid="bg-upload" @click="startPick">上传图片/视频</button>
         <button
-          v-if="background.kind !== 'starfield'"
+          v-if="background.descriptor"
           class="btn"
           data-testid="bg-remove"
           @click="removeBg"
@@ -302,9 +324,7 @@ async function doImport(e) {
           @cancel="pickerOpen = false"
         />
       </div>
-      <p class="placeholder">
-        图片/GIF 最大 8 MB，视频最大 30 MB；素材只存本机，不进备份。
-      </p>
+      <p class="placeholder">图片/GIF 至少 {{ bgRequirement.width }}×{{ bgRequirement.height }} 物理像素（铺满不放大）；视频不限分辨率；图片/GIF 最大 8 MB、视频最大 30 MB；素材只存本机，不进备份。</p>
     </div>
 
     <div class="card block">
@@ -404,6 +424,13 @@ async function doImport(e) {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.bg-warn {
+  margin: 0;
+  color: var(--warning);
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .preview-glass {

@@ -7,29 +7,53 @@
  */
 
 import { defineStore } from 'pinia'
-import { validateMeta } from '@/services/background'
+import { checkCoverResolution, validateMeta } from '@/services/background'
 import * as repo from '@/repositories/background'
 
 function setBgImage(value) {
   document.documentElement.style.setProperty('--bg-image', value)
 }
 
+/** 纯函数门所需的视口快照；services 保持零 DOM */
+function currentView() {
+  return {
+    innerWidth: window.innerWidth,
+    innerHeight: window.innerHeight,
+    dpr: window.devicePixelRatio,
+    screenW: window.screen && window.screen.width,
+    screenH: window.screen && window.screen.height,
+    coarse:
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(pointer: coarse)').matches,
+  }
+}
+
 function probeImage(file) {
   return (async () => {
     if (typeof createImageBitmap === 'function') {
       const bitmap = await createImageBitmap(file)
-      bitmap.close?.()
-      return
+      try {
+        const width = Number(bitmap.width)
+        const height = Number(bitmap.height)
+        if (!(width > 0 && height > 0)) throw new Error('empty bitmap')
+        return { width, height }
+      } finally {
+        bitmap.close?.()
+      }
     }
     // 老 Safari 无 createImageBitmap：退化为 <img> 解码探针
     const url = URL.createObjectURL(file)
     try {
-      await new Promise((resolve, reject) => {
-        const img = new Image()
-        img.onload = resolve
-        img.onerror = () => reject(new Error('decode failed'))
-        img.src = url
+      const img = await new Promise((resolve, reject) => {
+        const el = new Image()
+        el.onload = () => resolve(el)
+        el.onerror = () => reject(new Error('decode failed'))
+        el.src = url
       })
+      const width = Number(img.naturalWidth)
+      const height = Number(img.naturalHeight)
+      if (!(width > 0 && height > 0)) throw new Error('empty image')
+      return { width, height }
     } finally {
       URL.revokeObjectURL(url)
     }
@@ -51,17 +75,18 @@ function probeVideo(file) {
       if (done) return
       done = true
       clearTimeout(timer)
+      const dims = { width: video.videoWidth, height: video.videoHeight }
       URL.revokeObjectURL(url)
       video.removeAttribute('src')
       video.load?.()
       if (err) reject(err)
-      else resolve()
+      else resolve(dims)
     }
     const timer = setTimeout(() => finish(new Error('无法解码该视频')), 8000)
     video.preload = 'metadata'
     video.muted = true
     video.onloadedmetadata = () => {
-      if (video.videoWidth > 0) finish()
+      if (video.videoWidth > 0 && video.videoHeight > 0) finish()
       else finish(new Error('无法解码该视频'))
     }
     video.onerror = () => finish(new Error('无法解码该视频'))
@@ -89,6 +114,7 @@ export const useBackgroundStore = defineStore('background', {
     descriptor: null,
     suspended: false,
     videoReady: false,
+    blocked: null, // { width, height, required: { width, height } }，仅内存
     notice: '',
   }),
   getters: {
@@ -145,21 +171,49 @@ export const useBackgroundStore = defineStore('background', {
         this.revoke()
         this.descriptor = null
         this.kind = 'starfield'
+        this.blocked = null
         this.applyBackground()
         return
       }
       try {
         const blob = await repo.readBytes()
         if (!blob || blob.size !== descriptor.size) throw new Error('missing bytes')
+
+        let dims = null
+        if (descriptor.kind !== 'video') {
+          dims =
+            descriptor.width > 0 && descriptor.height > 0
+              ? { width: descriptor.width, height: descriptor.height }
+              : await probeImage(blob)
+          const gate = checkCoverResolution(dims.width, dims.height, currentView())
+          if (!gate.ok) {
+            // 旧低分素材：保留 OPFS 字节与描述符，本次仅停用
+            this.revoke()
+            this.descriptor = descriptor
+            this.kind = 'starfield'
+            this.blocked = {
+              width: dims.width,
+              height: dims.height,
+              required: { width: gate.width, height: gate.height },
+            }
+            this.notice = `现有背景分辨率不足（${dims.width}×${dims.height}），已暂用星空；请恢复星空后重新上传。`
+            this.applyBackground()
+            return
+          }
+        }
+
         this.revoke()
-        this.descriptor = descriptor
+        // 补测出的宽高只放内存，不写回 IDB；下次启动重新判门
+        this.descriptor = dims ? { ...descriptor, ...dims } : descriptor
         this.kind = descriptor.kind
+        this.blocked = null
         this.url = URL.createObjectURL(blob)
         this.applyBackground()
       } catch {
         this.revoke()
         this.descriptor = null
         this.kind = 'starfield'
+        this.blocked = null
         try {
           await repo.clearDescriptor()
         } catch {
@@ -170,13 +224,16 @@ export const useBackgroundStore = defineStore('background', {
       }
     },
 
-    /** 顺序固定：MIME/体积 → 解码探针 → estimate → OPFS → 描述符 → 换 URL */
+    /** 顺序固定：MIME/体积 → 解码探针 → 分辨率门 → estimate → OPFS → 描述符 → 换 URL */
     async chooseFile(file) {
       const meta = validateMeta(file)
       if (!meta.ok) throw new Error(meta.message)
       if (!repo.opfsSupported()) throw new Error('当前浏览器无法保存背景素材')
-      if (meta.kind === 'video') await probeVideo(file)
-      else await probeImage(file)
+      const dims = meta.kind === 'video' ? await probeVideo(file) : await probeImage(file)
+      if (meta.kind !== 'video') {
+        const gate = checkCoverResolution(dims.width, dims.height, currentView())
+        if (!gate.ok) throw new Error(gate.message)
+      }
       await ensureCapacity(file.size)
       try {
         await repo.writeBytes(file)
@@ -188,6 +245,8 @@ export const useBackgroundStore = defineStore('background', {
         mime: meta.mime,
         size: meta.size,
         updatedAt: new Date().toISOString(),
+        width: dims.width,
+        height: dims.height,
       }
       try {
         await repo.setDescriptor(descriptor)
@@ -199,6 +258,7 @@ export const useBackgroundStore = defineStore('background', {
       this.descriptor = descriptor
       this.kind = descriptor.kind
       this.url = URL.createObjectURL(file)
+      this.blocked = null
       this.notice = ''
       this.applyBackground()
       return descriptor
@@ -208,6 +268,7 @@ export const useBackgroundStore = defineStore('background', {
       this.revoke()
       this.descriptor = null
       this.kind = 'starfield'
+      this.blocked = null
       this.notice = ''
       this.applyBackground()
       let failed = false

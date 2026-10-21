@@ -1,8 +1,8 @@
 /**
  * services/background.js — 背景素材的纯校验（零 DOM）
  *
- * 只负责 MIME → kind、大小上限与描述符形状；解码探针、OPFS、objectURL
- * 分别在 store / repositories 层。
+ * 只负责 MIME → kind、大小上限、描述符形状与铺满不放大门；解码探针、
+ * OPFS、objectURL 分别在 store / repositories 层。
  */
 
 export const LIMITS = {
@@ -27,7 +27,47 @@ export function normalizeDescriptor(value) {
   if (kind === 'video' ? !mime.startsWith('video/') : !mime.startsWith('image/')) return null
   if (!Number.isFinite(value.size) || value.size <= 0) return null
   if (typeof value.updatedAt !== 'string' || !value.updatedAt) return null
-  return { kind, mime, size: value.size, updatedAt: value.updatedAt }
+  const descriptor = { kind, mime, size: value.size, updatedAt: value.updatedAt }
+  if (
+    Number.isInteger(value.width) &&
+    value.width > 0 &&
+    Number.isInteger(value.height) &&
+    value.height > 0
+  ) {
+    descriptor.width = value.width
+    descriptor.height = value.height
+  }
+  return descriptor
+}
+
+/** 当前视口铺满所需的最小物理像素；触屏按屏幕长边同时约束宽高 */
+export function coverRequirement(view) {
+  const dpr = Number(view.dpr) > 0 ? Number(view.dpr) : 1
+  if (view.coarse) {
+    const maxCss = Math.max(
+      Number(view.screenW) || Number(view.innerWidth) || 0,
+      Number(view.screenH) || Number(view.innerHeight) || 0,
+    )
+    const need = Math.ceil(maxCss * dpr)
+    return { width: need, height: need }
+  }
+  return {
+    width: Math.ceil((Number(view.innerWidth) || 0) * dpr),
+    height: Math.ceil((Number(view.innerHeight) || 0) * dpr),
+  }
+}
+
+export function checkCoverResolution(width, height, view) {
+  const need = coverRequirement(view)
+  if (width >= need.width && height >= need.height) {
+    return { ok: true, width: need.width, height: need.height }
+  }
+  return {
+    ok: false,
+    width: need.width,
+    height: need.height,
+    message: `分辨率不足：至少需要 ${need.width}×${need.height} 物理像素（当前 ${width}×${height}），铺满会被放大`,
+  }
 }
 
 export function validateMeta(file) {
