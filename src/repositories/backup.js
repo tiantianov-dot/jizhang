@@ -20,7 +20,7 @@ const EXPORTABLE_SETTING_KEYS = new Set([
   'monthlyBudget',
   'ownerName',
   'uiGlassIntensity',
-  'uiGlassDim',
+  'uiGlassFill',
 ])
 
 function isExportableSetting(row) {

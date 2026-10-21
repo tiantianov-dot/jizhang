@@ -7,11 +7,8 @@
  */
 
 import { defineStore } from 'pinia'
-import bgStarfield from '@/assets/bg-starfield.webp'
 import { validateMeta } from '@/services/background'
 import * as repo from '@/repositories/background'
-
-const STARFIELD = `url("${bgStarfield}")`
 
 function setBgImage(value) {
   document.documentElement.style.setProperty('--bg-image', value)
@@ -91,12 +88,10 @@ export const useBackgroundStore = defineStore('background', {
     url: '',
     descriptor: null,
     suspended: false,
+    videoReady: false,
     notice: '',
   }),
   getters: {
-    /** L2 只对静态图/星空开放；GIF/视频不做镜像 */
-    mirrorAllowed: (s) =>
-      !s.suspended && (s.kind === 'starfield' || s.kind === 'image'),
     starfieldVisible: (s) => !s.suspended && s.kind === 'starfield',
   },
   actions: {
@@ -105,18 +100,37 @@ export const useBackgroundStore = defineStore('background', {
       this.url = ''
     },
 
-    /** 把当前状态同步到 --bg-image / data-bg；挂起时一律临时换星空 */
+    /** data-bg / data-video-ready / --bg-image 的唯一写入点 */
     applyBackground() {
+      const root = document.documentElement
       if (this.suspended) {
-        setBgImage(STARFIELD)
+        setBgImage('none')
+        delete root.dataset.bg
+        this.resetVideoReady()
       } else if (this.kind === 'image' || this.kind === 'gif') {
         setBgImage(`url("${this.url}")`)
+        root.dataset.bg = this.kind
+        this.resetVideoReady()
       } else if (this.kind === 'starfield') {
-        setBgImage(STARFIELD)
+        setBgImage('none')
+        root.dataset.bg = 'starfield'
+        this.resetVideoReady()
       } else {
         setBgImage('none')
+        root.dataset.bg = 'video'
+        this.resetVideoReady()
       }
-      if (this.suspended || this.kind !== 'video') delete document.documentElement.dataset.bg
+    },
+
+    markVideoReady() {
+      if (this.suspended || this.kind !== 'video') return
+      this.videoReady = true
+      document.documentElement.setAttribute('data-video-ready', '')
+    },
+
+    resetVideoReady() {
+      this.videoReady = false
+      delete document.documentElement.dataset.videoReady
     },
 
     async load() {
@@ -182,7 +196,6 @@ export const useBackgroundStore = defineStore('background', {
         throw new Error('无法保存背景设置')
       }
       this.revoke()
-      delete document.documentElement.dataset.bg
       this.descriptor = descriptor
       this.kind = descriptor.kind
       this.url = URL.createObjectURL(file)
@@ -196,7 +209,6 @@ export const useBackgroundStore = defineStore('background', {
       this.descriptor = null
       this.kind = 'starfield'
       this.notice = ''
-      delete document.documentElement.dataset.bg
       this.applyBackground()
       let failed = false
       try {
@@ -219,7 +231,6 @@ export const useBackgroundStore = defineStore('background', {
       this.suspended = next
       if (next) {
         document.documentElement.setAttribute('data-bg-suspended', '')
-        delete document.documentElement.dataset.bg
       } else {
         document.documentElement.removeAttribute('data-bg-suspended')
       }

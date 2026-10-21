@@ -98,7 +98,7 @@ async function remove() {
 </script>
 
 <template>
-  <div class="card form">
+  <div class="card form" data-blur="off">
     <div class="form-title">{{ isEdit ? '编辑分类' : '新增分类' }}</div>
 
     <div class="field">
@@ -181,7 +181,7 @@ async function remove() {
 
 .seg {
   display: flex;
-  background: rgba(0, 0, 0, .22);
+  background: var(--glass-well);
   border-radius: 999px;
   padding: 3px;
 }
@@ -194,17 +194,17 @@ async function remove() {
 }
 
 .seg button.on {
-  background: rgba(255, 255, 255, .14);
-  color: var(--text);
+  background: var(--glass-active-fill);
+  color: var(--on-glass);
   font-weight: 600;
 }
 
 .input {
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--glass-hairline);
+  border: 1px solid var(--glass-edge-2);
   border-radius: 8px;
-  background: rgba(0, 0, 0, .22);
+  background: var(--glass-well);
   color: var(--text);
   font-size: 14px;
   padding: 8px 10px;
@@ -218,7 +218,7 @@ async function remove() {
 
 .btn {
   flex: 1;
-  background: rgba(var(--panel-fill-rgb), calc(.08 + .10 * var(--glass-intensity)));
+  background: var(--glass-fill);
   border: 1px solid var(--glass-edge-2);
   color: var(--on-glass);
   font-size: 14px;
@@ -235,8 +235,8 @@ async function remove() {
 .btn.ghost {
   flex: none;
   width: 5em;
-  background: rgba(0, 0, 0, .22);
-  border: 1px solid var(--glass-hairline);
+  background: transparent;
+  border: 1px solid var(--glass-edge-2);
   color: var(--text-secondary);
   text-shadow: none;
 }

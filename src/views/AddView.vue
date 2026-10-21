@@ -6,7 +6,6 @@ import { useRecordsStore } from '@/stores/records'
 import { useAppearanceStore } from '@/stores/appearance'
 import { useBackgroundStore } from '@/stores/background'
 import { useImmersive } from '@/composables/useImmersive'
-import { useBackgroundMirror } from '@/composables/useBackgroundMirror'
 import { toFen, fenToYuan, fenToInput, todayStr } from '@/utils/format'
 import { parseEntryQuery, parseEntryJson } from '@/services/entry'
 import AmountPad from '@/components/AmountPad.vue'
@@ -50,12 +49,7 @@ const immersiveLabel = computed(() => {
   return '关闭'
 })
 
-/** L2 只在沉浸关闭且背景是静态图/星空时挂载 */
-const mirrorOn = computed(
-  () => immersiveState.value === 'closed' && background.mirrorAllowed,
-)
-
-useBackgroundMirror()
+/** L2 已取消：V5 全部区块使用同一套真玻璃 */
 
 function toggleImmersive() {
   if (immersiveState.value === 'closed') openImmersive()
@@ -70,7 +64,7 @@ watch(
     background.setSuspended(next !== 'closed')
     if (next === 'closed') appearance.previewIntensity(appearance.glassIntensity)
     else if (prev === 'closed') {
-      appearance.previewIntensity(Math.max(0.3, appearance.glassIntensity - 0.25))
+      appearance.previewIntensity(Math.max(0, appearance.glassIntensity - 0.25))
     }
   },
   { flush: 'sync' },
@@ -95,6 +89,15 @@ const display = computed(() => {
   if (!buffer.value) return '0.00'
   const fen = toFen(buffer.value === '.' ? '0.' : buffer.value)
   return fenToYuan(fen)
+})
+
+/** 头卡副行：今天 / M月D日，有备注时用「 · 」连接 */
+const subline = computed(() => {
+  const day = date.value === todayStr() ? '今天' : ''
+  const [, m, d] = (date.value || '').split('-')
+  const label = day || (m && d ? `${Number(m)}月${Number(d)}日` : '')
+  const n = note.value.trim()
+  return n ? [label, n].filter(Boolean).join(' · ') : label
 })
 
 function switchType(t) {
@@ -262,50 +265,50 @@ async function undo() {
     />
 
     <!-- 收支切换 + 金额 -->
-    <GlassPanel
-      tier="clear"
-      class="head card"
-      :mirror="mirrorOn"
-      mirror-name="head"
-    >
+    <GlassPanel shape="panel" class="head">
       <div class="seg">
         <button :class="{ on: type === 'expense' }" @click="switchType('expense')">支出</button>
         <button :class="{ on: type === 'income' }" @click="switchType('income')">收入</button>
       </div>
-      <div class="amount" :class="type">¥ {{ display }}</div>
+      <div class="amount" :class="type"><span class="cur">¥</span>{{ display }}</div>
+      <div class="sub">{{ subline }}</div>
     </GlassPanel>
 
-    <!-- 分类大按钮平铺：最近使用自动排前 -->
+    <!-- 分类 chip：最近使用自动排前 -->
     <CategoryGrid v-model="activeCat" :cats="cats" />
 
     <!-- 备注 / 日期 / 私密 / 剪贴板入口 -->
-    <div class="meta card">
+    <GlassPanel shape="chip" class="meta">
       <input v-model="note" class="note" placeholder="备注（可选）" maxlength="30" />
-      <input v-model="date" class="date" type="date" />
-      <button class="paste" title="从剪贴板读取记账内容" @click="pasteEntry">⌘ 粘贴</button>
-      <button
-        class="lock"
-        :class="{ on: isPrivate }"
-        title="私密账单：不同步"
-        @click="isPrivate = !isPrivate"
-      >
-        {{ isPrivate ? '🔒' : '🔓' }}
-      </button>
-      <button
-        class="immersive"
-        :class="{ on: immersiveState !== 'closed' }"
-        data-testid="immersive-toggle"
-        :title="immersiveState === 'closed' ? '开启沉浸背景' : '关闭沉浸背景'"
-        :aria-label="immersiveState === 'closed' ? '开启沉浸背景' : '关闭沉浸背景'"
-        :aria-busy="immersiveState === 'requesting'"
-        @click="toggleImmersive"
-      >
-        {{ immersiveLabel }}
-      </button>
-    </div>
+      <div class="right">
+        <input v-model="date" class="date" type="date" />
+        <button class="paste pill" title="从剪贴板读取记账内容" @click="pasteEntry">
+          ⌘ 粘贴
+        </button>
+        <button
+          class="lock pill"
+          :class="{ on: isPrivate }"
+          title="私密账单：不同步"
+          @click="isPrivate = !isPrivate"
+        >
+          {{ isPrivate ? '🔒' : '🔓' }}
+        </button>
+        <button
+          class="immersive pill"
+          :class="{ on: immersiveState !== 'closed' }"
+          data-testid="immersive-toggle"
+          :title="immersiveState === 'closed' ? '开启沉浸背景' : '关闭沉浸背景'"
+          :aria-label="immersiveState === 'closed' ? '开启沉浸背景' : '关闭沉浸背景'"
+          :aria-busy="immersiveState === 'requesting'"
+          @click="toggleImmersive"
+        >
+          {{ immersiveLabel }}
+        </button>
+      </div>
+    </GlassPanel>
 
     <!-- 数字键盘 -->
-    <AmountPad v-model:buffer="buffer" :saving="saving" :mirror="mirrorOn" @save="save" />
+    <AmountPad v-model:buffer="buffer" :saving="saving" @save="save" />
 
     <!-- 保存反馈：点击撤销 -->
     <button v-if="toast" class="toast" @click="undo">{{ toast }}</button>
@@ -320,136 +323,135 @@ async function undo() {
 }
 
 .head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  border-radius: var(--glass-radius-panel);
+  padding: 13px 16px 15px;
+  margin-top: 2px;
+  overflow: visible;
 }
 
-/* GlassPanel 的内容层垫在 blur/border 之上，布局落在它身上 */
-.head :deep(.gp-content) {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
-.seg {
-  display: flex;
-  background: rgba(0, 0, 0, .22);
-  border-radius: 999px;
+.head .seg {
+  display: inline-flex;
   padding: 3px;
-}
-
-.seg button {
-  padding: 6px 18px;
   border-radius: 999px;
-  font-size: 14px;
-  color: var(--text-secondary);
+  background: var(--glass-well);
 }
 
-.seg button.on {
-  background: rgba(255, 255, 255, .14);
-  color: var(--text);
-  font-weight: 600;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 1px 4px rgba(0, 0, 0, .25);
+.head .seg button {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--on-glass-2);
+  font-size: 12px;
+  padding: 5px 14px;
+  border-radius: 999px;
 }
 
-.amount {
-  font-size: 30px;
-  font-weight: 600;
+.head .seg button.on {
+  background: var(--glass-active-fill);
+  color: var(--on-glass);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.head .amount {
+  margin-top: 9px;
+  font-size: 44px;
+  font-weight: 250;
+  letter-spacing: -1.6px;
+  line-height: 1.04;
   font-variant-numeric: tabular-nums;
 }
 
-.amount.income {
+.head .amount .cur {
+  font-size: 24px;
+  opacity: 0.68;
+  margin-right: 3px;
+  letter-spacing: 0;
+}
+
+.head .amount.income {
   color: var(--income);
+}
+
+.head .sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--on-glass-2);
 }
 
 .meta {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  color: var(--on-glass-2);
+  font-size: 12px;
+  text-shadow: var(--on-glass-shadow);
+  box-shadow: var(--glass-lift-shadow);
 }
 
-.note {
+.meta .right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.meta .pill {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--glass-well);
+  color: var(--on-glass-2);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.meta .note {
   flex: 1;
   min-width: 0;
   border: none;
   outline: none;
   background: transparent;
-  color: var(--text);
+  color: var(--on-glass);
   font-size: 14px;
-  padding: 6px 0;
+  padding: 2px 0;
 }
 
-.date {
+.meta .date {
   border: none;
   outline: none;
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 13px;
-  width: 8.5em;
-}
-
-.paste {
-  flex: none;
+  color: var(--on-glass-2);
   font-size: 12px;
-  line-height: 1;
+  width: 7.8em;
+  flex: none;
+}
+
+.meta .pill.on {
+  background: var(--glass-active-fill);
+  color: var(--on-glass);
+}
+
+.meta .paste {
   white-space: nowrap;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 0.5px solid var(--border);
-  border-radius: 999px;
-  padding: 6px 9px;
 }
 
-.paste:active {
-  background: rgba(var(--panel-fill-rgb), .08);
-}
-
-.lock {
+.meta .lock {
   font-size: 17px;
   opacity: 0.55;
-  padding: 4px;
 }
 
-.lock.on {
+.meta .lock.on {
   opacity: 1;
 }
 
-.immersive {
-  flex: none;
+.meta .immersive {
   min-width: 3.6em;
-  padding: 6px 9px;
-  border: 0.5px solid var(--border);
-  border-radius: 999px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1;
   text-align: center;
   white-space: nowrap;
-}
-
-.immersive.on {
-  border-color: var(--glass-edge-3);
-  background: rgba(var(--panel-fill-rgb), calc(.04 + .06 * var(--glass-intensity)));
-  color: var(--text);
-}
-
-.toast {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
-  background: rgba(20, 20, 19, 0.92);
-  color: #f1efe8;
-  font-size: 13px;
-  padding: 10px 16px;
-  border-radius: 999px;
-  z-index: 20;
-  max-width: 86vw;
 }
 </style>

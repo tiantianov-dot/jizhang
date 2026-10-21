@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useRecordsStore } from '@/stores/records'
 import { useCategoriesStore } from '@/stores/categories'
@@ -8,7 +8,7 @@ import { useBackgroundStore } from '@/stores/background'
 import { toFen, stampNow, daysSince } from '@/utils/format'
 import * as backup from '@/repositories/backup'
 import GlassPanel from '@/components/GlassPanel.vue'
-import bgStarfield from '@/assets/bg-starfield.webp'
+import { drawStarfield } from '@/services/starfield'
 
 const settings = useSettingsStore()
 const records = useRecordsStore()
@@ -22,9 +22,8 @@ const msg = ref('')
 /* ---------- 外观：滑块值跟随 store；拖动只 preview，松手才持久化 ---------- */
 
 const intensity = ref(1)
-const dim = ref(0.3)
 const intensityPct = computed(() => Math.round(intensity.value * 100))
-const dimPct = computed(() => Math.round(dim.value * 100))
+const fillPct = ref(3)
 
 watch(
   () => appearance.glassIntensity,
@@ -35,9 +34,9 @@ watch(
 )
 
 watch(
-  () => appearance.glassDim,
+  () => appearance.glassFill,
   (v) => {
-    dim.value = v
+    fillPct.value = Math.round(v * 100)
   },
   { immediate: true },
 )
@@ -51,13 +50,13 @@ async function commitIntensity() {
   intensity.value = appearance.glassIntensity
 }
 
-function onDimInput() {
-  appearance.previewDim(dim.value)
+function onFillInput() {
+  appearance.previewFill(fillPct.value / 100)
 }
 
-async function commitDim() {
-  await appearance.setDim(dim.value)
-  dim.value = appearance.glassDim
+async function commitFill() {
+  await appearance.setFill(fillPct.value / 100)
+  fillPct.value = Math.round(appearance.glassFill * 100)
 }
 
 async function saveBudget() {
@@ -69,9 +68,27 @@ async function saveBudget() {
 
 /* ---------- 背景素材：懒挂载文件输入，选完即卸载 ---------- */
 
-const starfieldUrl = bgStarfield
 const pickerOpen = ref(false)
 const pickerEl = ref(null)
+const bgCanvas = ref(null)
+
+function drawPreview() {
+  const el = bgCanvas.value
+  if (!el) return
+  const dpr = Math.min(2, window.devicePixelRatio || 1)
+  el.width = Math.round(390 * dpr)
+  el.height = Math.round(800 * dpr)
+  const ctx = el.getContext('2d')
+  if (!ctx) return
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  drawStarfield(ctx, 390, 800)
+}
+
+onMounted(() => nextTick(drawPreview))
+watch(
+  () => background.kind,
+  () => nextTick(drawPreview),
+)
 
 const bgLabel = computed(() => {
   if (background.kind === 'image') return '图片'
@@ -181,13 +198,13 @@ async function doImport(e) {
       </div>
     </div>
 
-    <div class="card block">
+    <div class="card block" data-blur="off">
       <div class="row"><span>外观</span></div>
 
       <!-- 实时预览：垫一层高对比渐变，拖动滑块时材质变化立刻可见 -->
-      <div class="preview" data-testid="glass-preview">
+      <div class="preview">
         <div class="preview-bg"></div>
-        <GlassPanel tier="regular" class="preview-glass">
+        <GlassPanel shape="pill" class="preview-glass" data-testid="glass-preview">
           <div class="preview-inner">
             <span class="preview-dot"></span>
             <span class="preview-label">¥ 34.00</span>
@@ -198,42 +215,40 @@ async function doImport(e) {
 
       <div class="slider">
         <div class="slider-head">
-          <span>质感</span>
+          <span>模糊强度</span>
           <span class="cur">{{ intensityPct }}%</span>
         </div>
         <input
           v-model.number="intensity"
           class="range"
           type="range"
-          min="0.3"
+          min="0"
           max="1"
           step="0.05"
           data-testid="glass-intensity-slider"
-          aria-label="玻璃质感强度"
+          aria-label="模糊强度"
           @input="onIntensityInput"
           @change="commitIntensity"
         />
-        <div class="slider-scale"><span>通透</span><span>浓郁</span></div>
       </div>
 
       <div class="slider">
         <div class="slider-head">
-          <span>背景压暗</span>
-          <span class="cur">{{ dimPct }}%</span>
+          <span>玻璃填充（越低越透）</span>
+          <span class="cur">{{ fillPct }}%</span>
         </div>
         <input
-          v-model.number="dim"
+          v-model.number="fillPct"
           class="range"
           type="range"
           min="0"
-          max="0.6"
-          step="0.05"
-          data-testid="glass-dim-slider"
-          aria-label="背景压暗"
-          @input="onDimInput"
-          @change="commitDim"
+          max="30"
+          step="1"
+          data-testid="glass-fill-slider"
+          aria-label="玻璃填充（越低越透）"
+          @input="onFillInput"
+          @change="commitFill"
         />
-        <div class="slider-scale"><span>不压暗</span><span>最深</span></div>
       </div>
     </div>
 
@@ -243,8 +258,14 @@ async function doImport(e) {
         <span class="cur">{{ bgLabel }}</span>
       </div>
       <div class="bg-preview" data-testid="bg-preview">
+        <canvas
+          v-if="background.kind === 'starfield'"
+          ref="bgCanvas"
+          class="bg-preview-media"
+          data-testid="bg-preview-media"
+        />
         <video
-          v-if="background.kind === 'video'"
+          v-else-if="background.kind === 'video'"
           class="bg-preview-media"
           data-testid="bg-preview-media"
           :src="background.url"
@@ -257,7 +278,7 @@ async function doImport(e) {
           v-else
           class="bg-preview-media"
           data-testid="bg-preview-media"
-          :src="background.kind === 'starfield' ? starfieldUrl : background.url"
+          :src="background.url"
           alt=""
         />
       </div>
@@ -375,7 +396,7 @@ async function doImport(e) {
   margin: 6px 0 10px;
   border-radius: 12px;
   overflow: hidden;
-  background: #0a0e18;
+  background: #05070d;
 }
 
 .bg-preview-media {
@@ -392,10 +413,6 @@ async function doImport(e) {
   top: 18px;
   bottom: 18px;
   border-radius: 999px;
-}
-
-.preview-glass :deep(.gp-content) {
-  height: 100%;
 }
 
 .preview-inner {
@@ -444,13 +461,6 @@ async function doImport(e) {
   accent-color: var(--brand);
 }
 
-.slider-scale {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
 /* 备份健康度三态 */
 .bstat {
   justify-content: flex-start;
@@ -493,9 +503,9 @@ async function doImport(e) {
 .input {
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--glass-hairline);
+  border: 1px solid var(--glass-edge-2);
   border-radius: 8px;
-  background: rgba(0, 0, 0, .22);
+  background: var(--glass-well);
   color: var(--text);
   font-size: 14px;
   padding: 8px 10px;
@@ -503,7 +513,7 @@ async function doImport(e) {
 }
 
 .btn {
-  background: rgba(var(--panel-fill-rgb), calc(.08 + .10 * var(--glass-intensity)));
+  background: var(--glass-fill);
   border: 1px solid var(--glass-edge-2);
   color: var(--on-glass);
   font-size: 13px;

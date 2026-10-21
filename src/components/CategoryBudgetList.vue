@@ -14,7 +14,7 @@ defineProps({
 </script>
 
 <template>
-  <div class="card">
+  <div class="card" data-blur="off">
     <div class="c-head">分类预算</div>
     <RouterLink v-for="b in items" :key="b.id" class="brow" to="/categories">
       <span class="b-top">
@@ -42,7 +42,7 @@ defineProps({
   min-height: 44px;
   justify-content: center;
   padding: 8px 0;
-  border-bottom: 0.5px solid var(--border);
+  border-bottom: 1px solid var(--glass-edge-2);
   text-decoration: none;
   color: inherit;
 }
@@ -84,7 +84,7 @@ defineProps({
   display: block;
   height: 8px;
   border-radius: 999px;
-  background: var(--bg);
+  background: var(--glass-well);
   overflow: hidden;
 }
 

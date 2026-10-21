@@ -41,7 +41,7 @@ onUnmounted(() => {
 <template>
   <div class="mask" @click="emit('close')">
     <!-- @click.stop：点卡片内部不收起 -->
-    <GlassPanel tier="regular" class="sheet" @click.stop>
+    <GlassPanel shape="panel" class="sheet" @click.stop>
       <div class="sheet-scroll">
         <div class="s-head">按分类筛选</div>
 
@@ -103,11 +103,10 @@ onUnmounted(() => {
   width: 100%;
   max-width: 520px; /* 与 #app 同宽，桌面访问版式一致 */
   margin: 0 auto;
-  border-radius: 18px 18px 0 0;
 }
 
 .sheet.gp {
-  border-radius: 18px 18px 0 0;
+  border-radius: var(--glass-radius-panel) var(--glass-radius-panel) 0 0;
 }
 
 /* 滚动放在内容层内：blur 层固定，不随弹层内容滚走 */
@@ -116,7 +115,7 @@ onUnmounted(() => {
   overflow-y: auto;
   overscroll-behavior: contain; /* sheet 内滚到头不穿透带动背景滚动 */
   padding: 14px 16px calc(env(safe-area-inset-bottom) + 16px);
-  border-radius: 18px 18px 0 0;
+  border-radius: var(--glass-radius-panel) var(--glass-radius-panel) 0 0;
 }
 
 .s-head {
@@ -160,7 +159,7 @@ onUnmounted(() => {
 
 .item.on {
   border-color: var(--glass-edge-3);
-  background: rgba(var(--panel-fill-rgb), calc(.04 + .06 * var(--glass-intensity)));
+  background: var(--glass-active-fill);
 }
 
 .item.on .name {

@@ -149,7 +149,7 @@ onUnmounted(() => clearTimeout(undoTimer))
     </p>
 
     <template v-else>
-      <GlassPanel tier="regular" class="mbar">
+      <GlassPanel shape="chip" class="mbar">
         <div class="mnav">
           <button class="nav" @click="prevMonth">‹</button>
           <span class="mon">{{ month }}</span>
@@ -185,8 +185,8 @@ onUnmounted(() => clearTimeout(undoTimer))
           <span>{{ g.day }}</span>
           <span v-if="g.dayExpense" class="day-sum">支 ¥{{ fenToYuan(g.dayExpense) }}</span>
         </div>
-        <div class="card rows">
-          <button v-for="r in g.items" :key="r.id" class="row glass-row" @click="openRecord(r)">
+        <div class="card rows" data-blur="off">
+          <button v-for="r in g.items" :key="r.id" class="row" @click="openRecord(r)">
             <span class="emoji">{{ catOf(r)?.emoji || '📦' }}</span>
             <span class="main">
               <span class="cat">{{ catOf(r)?.name || '未分类' }}</span>
@@ -221,17 +221,8 @@ onUnmounted(() => clearTimeout(undoTimer))
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 6px 10px;
+  padding: 10px 12px;
   margin-bottom: 10px;
-}
-
-.mbar :deep(.gp-content) {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
 }
 
 .mnav {
@@ -250,9 +241,9 @@ onUnmounted(() => clearTimeout(undoTimer))
   width: 44px;
   height: 36px;
   border-radius: 8px;
-  background: rgba(0, 0, 0, .22);
-  border: 1px solid var(--glass-hairline);
-  color: var(--text);
+  background: var(--glass-well);
+  border: 1px solid var(--glass-edge-2);
+  color: var(--on-glass);
   font-size: 18px;
   line-height: 1;
 }
@@ -261,7 +252,7 @@ onUnmounted(() => clearTimeout(undoTimer))
   display: flex;
   gap: 8px;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--on-glass-2);
   font-variant-numeric: tabular-nums;
 }
 
@@ -287,15 +278,15 @@ onUnmounted(() => clearTimeout(undoTimer))
   height: 36px;
   padding: 0 12px;
   border-radius: 8px;
-  border: 1px solid var(--glass-hairline);
-  background: rgba(0, 0, 0, .22);
-  color: var(--text);
+  border: 1px solid var(--glass-edge-2);
+  background: var(--glass-well);
+  color: var(--on-glass);
   font-size: 16px; /* ≥16px：防 iOS 聚焦输入框时页面自动放大 */
   appearance: none;
 }
 
 .input::placeholder {
-  color: var(--text-secondary);
+  color: var(--on-glass-2);
 }
 
 .fbtn {
@@ -304,9 +295,9 @@ onUnmounted(() => clearTimeout(undoTimer))
   height: 36px;
   padding: 0 12px;
   border-radius: 8px;
-  border: 1px solid var(--glass-hairline);
-  background: rgba(0, 0, 0, .22);
-  color: var(--text-secondary);
+  border: 1px solid var(--glass-edge-2);
+  background: var(--glass-well);
+  color: var(--on-glass-2);
   font-size: 13px;
   overflow: hidden;
   white-space: nowrap;
@@ -316,6 +307,7 @@ onUnmounted(() => clearTimeout(undoTimer))
 .fbtn.on {
   color: var(--on-glass);
   border-color: var(--glass-edge-3);
+  background: var(--glass-active-fill);
   font-weight: 600;
 }
 
@@ -327,7 +319,7 @@ onUnmounted(() => clearTimeout(undoTimer))
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--on-glass-2);
   padding: 0 4px 6px;
 }
 
@@ -335,13 +327,9 @@ onUnmounted(() => clearTimeout(undoTimer))
   font-variant-numeric: tabular-nums;
 }
 
-/* 外壳压到很低，材质交给每一行的 .glass-row（零 backdrop-filter） */
+/* 长列表：外壳是一张 off 材质卡，行扁平、只用 edge-2 分隔 */
 .rows {
-  padding: 6px;
-}
-
-html[data-glass='on'] .rows {
-  background-color: rgba(var(--panel-fill-rgb), calc(.015 + .03 * var(--glass-intensity)));
+  padding: 2px 12px;
 }
 
 .row {
@@ -351,18 +339,13 @@ html[data-glass='on'] .rows {
   width: 100%;
   min-height: 44px;
   text-align: left;
-  padding: 10px 8px;
-  border-radius: 10px;
-  margin-bottom: 4px;
+  padding: 10px 2px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--glass-edge-2);
 }
 
 .row:last-child {
-  margin-bottom: 0;
-}
-
-/* 行在卡片内部，去掉外投影避免多层阴影堆叠 */
-.rows .row {
-  box-shadow: none;
+  border-bottom: none;
 }
 
 .emoji {
@@ -382,7 +365,7 @@ html[data-glass='on'] .rows {
 
 .note {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--on-glass-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -401,19 +384,5 @@ html[data-glass='on'] .rows {
 
 .amt.income {
   color: var(--income);
-}
-
-.toast {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
-  background: rgba(20, 20, 19, 0.92);
-  color: #f1efe8;
-  font-size: 13px;
-  padding: 10px 16px;
-  border-radius: 999px;
-  z-index: 20;
-  max-width: 86vw;
 }
 </style>

@@ -80,9 +80,9 @@ const emojiText = computed({
 .input {
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--glass-hairline);
+  border: 1px solid var(--glass-edge-2);
   border-radius: 8px;
-  background: rgba(0, 0, 0, .22);
+  background: var(--glass-well);
   color: var(--text);
   font-size: 14px;
   padding: 8px 10px;
@@ -105,8 +105,8 @@ const emojiText = computed({
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  border: 1.5px solid transparent;
-  background: rgba(0, 0, 0, .22);
+  border: 1.5px solid var(--glass-edge-2);
+  background: var(--glass-well);
   font-size: 17px;
   line-height: 1;
 }

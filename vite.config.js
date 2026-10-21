@@ -16,8 +16,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icons/apple-touch-icon.png'],
       workbox: {
-        // vite-plugin-pwa@2 默认 glob 不收 webp，星野图必须显式纳入 precache
-        globPatterns: ['**/*.{js,css,html,webp}'],
+        globPatterns: ['**/*.{js,css,html}'],
       },
       manifest: {
         name: '极简记账',
@@ -25,8 +24,8 @@ export default defineConfig({
         id: './',
         lang: 'zh-CN',
         description: '极简功能不减，快速记账',
-        theme_color: '#0a0e18',
-        background_color: '#141413',
+        theme_color: '#05070d',
+        background_color: '#05070d',
         display: 'standalone',
         start_url: './',
         scope: './',

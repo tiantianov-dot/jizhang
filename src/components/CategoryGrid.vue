@@ -1,12 +1,13 @@
 <script setup>
 /**
- * CategoryGrid.vue — 分类大按钮平铺（记一笔 / 编辑页复用）
+ * CategoryGrid.vue — 分类 chip 横向滚动（记一笔 / 编辑页复用）
  *
  * v-model 绑定当前选中的 categoryId；cats 为该收支类型下的分类
- * （store 已按 lastUsedAt 最近使用排前，这是「3 秒记账」的核心体验）。
- * 选中的 id 不在 cats 里（分类被归档/删除）时降级显示「未分类 📦」，不崩溃。
+ * （store 已按 lastUsedAt 最近使用排前）。每个 chip 是独立玻璃。
+ * 选中 id 不在 cats 里（分类被归档/删除）时降级显示「未分类」。
  */
 import { computed } from 'vue'
+import GlassPanel from './GlassPanel.vue'
 
 const props = defineProps({
   /** 该收支类型下的分类列表（最近使用排前） */
@@ -24,64 +25,71 @@ const missing = computed(
 </script>
 
 <template>
-  <div class="cats card">
-    <span v-if="missing" class="cat on missing">
-      <span class="emoji">📦</span>
+  <div class="cats">
+    <GlassPanel v-if="missing" tag="span" shape="chip" class="cat on missing">
+      <i class="dot" style="--dot: #aaa" />
       <span class="name">未分类</span>
-    </span>
-    <button
+    </GlassPanel>
+    <GlassPanel
       v-for="c in cats"
       :key="c.id"
+      tag="button"
+      type="button"
+      shape="chip"
       class="cat"
       :class="{ on: modelValue === c.id }"
+      data-ripple
       @click="emit('update:modelValue', c.id)"
     >
-      <span class="emoji">{{ c.emoji }}</span>
+      <i class="dot" :style="{ '--dot': c.color || '#aaa' }" />
       <span class="name">{{ c.name }}</span>
-    </button>
+    </GlassPanel>
   </div>
 </template>
 
 <style scoped>
 .cats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-  padding: 10px;
+  display: flex;
+  gap: 8px;
+  padding: 1px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.cats::-webkit-scrollbar {
+  display: none;
 }
 
 .cat {
-  display: flex;
-  flex-direction: column;
+  flex: 0 0 auto;
+  display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 8px 2px;
-  border-radius: 10px;
-  border: 1.5px solid transparent;
-}
-
-.cat .emoji {
-  font-size: 22px;
-  line-height: 1;
-}
-
-.cat .name {
+  gap: 6px;
+  padding: 8px 11px;
+  border-radius: 14px;
+  color: var(--on-glass-2);
   font-size: 12px;
-  color: var(--text-secondary);
+  text-shadow: var(--on-glass-shadow);
+  box-shadow: var(--glass-lift-shadow);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.cat .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dot, #aaa);
+  box-shadow: 0 0 8px var(--dot, #aaa);
 }
 
 .cat.on {
-  border-color: var(--glass-edge-3);
-  background: rgba(var(--panel-fill-rgb), calc(.04 + .06 * var(--glass-intensity)));
-}
-
-.cat.on .name {
+  background-color: var(--glass-active-fill);
   color: var(--on-glass);
-  font-weight: 600;
 }
 
-/* 选中项已失效（分类被归档）：虚线边框提示不是正常分类 */
 .cat.on.missing {
   border-style: dashed;
+  border-color: var(--glass-edge-3);
 }
 </style>

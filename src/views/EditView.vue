@@ -10,7 +10,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCategoriesStore } from '@/stores/categories'
 import { useRecordsStore } from '@/stores/records'
-import { toFen, fenToYuan, fenToInput } from '@/utils/format'
+import { toFen, fenToYuan, fenToInput, todayStr } from '@/utils/format'
 import AmountPad from '@/components/AmountPad.vue'
 import CategoryGrid from '@/components/CategoryGrid.vue'
 import GlassPanel from '@/components/GlassPanel.vue'
@@ -40,6 +40,15 @@ const display = computed(() => {
   if (!buffer.value) return '0.00'
   const fen = toFen(buffer.value === '.' ? '0.' : buffer.value)
   return fenToYuan(fen)
+})
+
+/** 头卡副行：今天 / M月D日，有备注时用「 · 」连接 */
+const subline = computed(() => {
+  const day = date.value === todayStr() ? '今天' : ''
+  const [, m, d] = (date.value || '').split('-')
+  const label = day || (m && d ? `${Number(m)}月${Number(d)}日` : '')
+  const n = note.value.trim()
+  return n ? [label, n].filter(Boolean).join(' · ') : label
 })
 
 /** 分 → 金额输入缓冲串：去掉无意义的尾随 0 与小数点（35.50 → "35.5"，35.00 → "35"） */
@@ -146,30 +155,33 @@ async function remove() {
     </div>
 
     <!-- 收支切换 + 金额 -->
-    <GlassPanel tier="clear" class="head card">
+    <GlassPanel shape="panel" class="head">
       <div class="seg">
         <button :class="{ on: type === 'expense' }" @click="switchType('expense')">支出</button>
         <button :class="{ on: type === 'income' }" @click="switchType('income')">收入</button>
       </div>
-      <div class="amount" :class="type">¥ {{ display }}</div>
+      <div class="amount" :class="type"><span class="cur">¥</span>{{ display }}</div>
+      <div class="sub">{{ subline }}</div>
     </GlassPanel>
 
     <!-- 分类：保留原分类；原分类已归档时降级显示「未分类」 -->
     <CategoryGrid v-model="categoryId" :cats="cats" />
 
     <!-- 备注 / 日期 / 私密 -->
-    <div class="meta card">
+    <GlassPanel shape="chip" class="meta">
       <input v-model="note" class="note" placeholder="备注（可选）" maxlength="30" />
-      <input v-model="date" class="date" type="date" />
-      <button
-        class="lock"
-        :class="{ on: isPrivate }"
-        title="私密账单：不同步"
-        @click="isPrivate = !isPrivate"
-      >
-        {{ isPrivate ? '🔒' : '🔓' }}
-      </button>
-    </div>
+      <div class="right">
+        <input v-model="date" class="date" type="date" />
+        <button
+          class="lock pill"
+          :class="{ on: isPrivate }"
+          title="私密账单：不同步"
+          @click="isPrivate = !isPrivate"
+        >
+          {{ isPrivate ? '🔒' : '🔓' }}
+        </button>
+      </div>
+    </GlassPanel>
 
     <!-- 删除：两段式确认，不用 window.confirm -->
     <button
@@ -182,7 +194,7 @@ async function remove() {
     </button>
 
     <!-- 数字键盘 -->
-    <AmountPad v-model:buffer="buffer" :saving="saving" :identity="false" @save="save" />
+    <AmountPad v-model:buffer="buffer" :saving="saving" @save="save" />
 
     <!-- 校验反馈 -->
     <button v-if="toast" class="toast" @click="toast = ''">{{ toast }}</button>
@@ -213,87 +225,125 @@ async function remove() {
 }
 
 .head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  border-radius: var(--glass-radius-panel);
+  padding: 13px 16px 15px;
+  margin-top: 2px;
+  overflow: visible;
 }
 
-/* GlassPanel 的内容层垫在 blur/border 之上，布局落在它身上 */
-.head :deep(.gp-content) {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
-.seg {
-  display: flex;
-  background: rgba(0, 0, 0, .22);
-  border-radius: 999px;
+.head .seg {
+  display: inline-flex;
   padding: 3px;
-}
-
-.seg button {
-  padding: 6px 18px;
   border-radius: 999px;
-  font-size: 14px;
-  color: var(--text-secondary);
+  background: var(--glass-well);
 }
 
-.seg button.on {
-  background: rgba(255, 255, 255, .14);
-  color: var(--text);
-  font-weight: 600;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 1px 4px rgba(0, 0, 0, .25);
+.head .seg button {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--on-glass-2);
+  font-size: 12px;
+  padding: 5px 14px;
+  border-radius: 999px;
 }
 
-.amount {
-  font-size: 30px;
-  font-weight: 600;
+.head .seg button.on {
+  background: var(--glass-active-fill);
+  color: var(--on-glass);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.head .amount {
+  margin-top: 9px;
+  font-size: 44px;
+  font-weight: 250;
+  letter-spacing: -1.6px;
+  line-height: 1.04;
   font-variant-numeric: tabular-nums;
 }
 
-.amount.income {
+.head .amount .cur {
+  font-size: 24px;
+  opacity: 0.68;
+  margin-right: 3px;
+  letter-spacing: 0;
+}
+
+.head .amount.income {
   color: var(--income);
+}
+
+.head .sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--on-glass-2);
 }
 
 .meta {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  color: var(--on-glass-2);
+  font-size: 12px;
+  text-shadow: var(--on-glass-shadow);
+  box-shadow: var(--glass-lift-shadow);
 }
 
-.note {
+.meta .right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.meta .pill {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--glass-well);
+  color: var(--on-glass-2);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.meta .note {
   flex: 1;
   min-width: 0;
   border: none;
   outline: none;
   background: transparent;
-  color: var(--text);
+  color: var(--on-glass);
   font-size: 14px;
-  padding: 6px 0;
+  padding: 2px 0;
 }
 
-.date {
+.meta .date {
   border: none;
   outline: none;
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 13px;
-  width: 8.5em;
+  color: var(--on-glass-2);
+  font-size: 12px;
+  width: 7.8em;
+  flex: none;
 }
 
-.lock {
+.meta .pill.on {
+  background: var(--glass-active-fill);
+  color: var(--on-glass);
+}
+
+.meta .lock {
   font-size: 17px;
   opacity: 0.55;
-  padding: 4px;
 }
 
-.lock.on {
+.meta .lock.on {
   opacity: 1;
 }
 
@@ -301,8 +351,8 @@ async function remove() {
 .del {
   padding: 12px 0;
   border-radius: 10px;
-  border: 1px solid rgba(163, 45, 45, .55);
-  background: rgba(163, 45, 45, .22);
+  border: 1px solid rgba(163, 45, 45, 0.55);
+  background: rgba(163, 45, 45, 0.22);
   color: #fff;
   font-size: 15px;
 }
@@ -317,19 +367,5 @@ async function remove() {
 
 .del:disabled {
   opacity: 0.55;
-}
-
-.toast {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
-  background: rgba(20, 20, 19, 0.92);
-  color: #f1efe8;
-  font-size: 13px;
-  padding: 10px 16px;
-  border-radius: 999px;
-  z-index: 20;
-  max-width: 86vw;
 }
 </style>

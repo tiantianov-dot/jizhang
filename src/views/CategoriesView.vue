@@ -86,7 +86,7 @@ async function restore(c) {
     <button v-else class="btn add" @click="openCreate">＋ 新增分类</button>
 
     <div class="sec">支出分类</div>
-    <div class="card rows">
+    <div class="card rows" data-blur="off">
       <div v-for="c in categories.expense" :key="c.id" class="row">
         <span class="emoji">{{ c.emoji }}</span>
         <span class="name">{{ c.name }}</span>
@@ -97,7 +97,7 @@ async function restore(c) {
     </div>
 
     <div class="sec">收入分类</div>
-    <div class="card rows">
+    <div class="card rows" data-blur="off">
       <div v-for="c in categories.income" :key="c.id" class="row">
         <span class="emoji">{{ c.emoji }}</span>
         <span class="name">{{ c.name }}</span>
@@ -109,7 +109,7 @@ async function restore(c) {
 
     <template v-if="categories.archived.length">
       <div class="sec">已归档</div>
-      <div class="card rows">
+      <div class="card rows" data-blur="off">
         <div v-for="c in categories.archived" :key="c.id" class="row muted">
           <span class="emoji">{{ c.emoji }}</span>
           <span class="name">{{ c.name }}</span>
@@ -162,7 +162,7 @@ async function restore(c) {
   gap: 10px;
   min-height: 44px;
   padding: 8px 0;
-  border-bottom: 0.5px solid var(--border);
+  border-bottom: 1px solid var(--glass-edge-2);
 }
 
 .row:last-child {
@@ -199,27 +199,12 @@ async function restore(c) {
 }
 
 .btn.add {
-  background: rgba(var(--panel-fill-rgb), calc(.03 + .06 * var(--glass-intensity)));
+  background: var(--glass-fill);
   border: 1px dashed var(--glass-edge-2);
   color: var(--on-glass);
   font-size: 14px;
   padding: 10px 0;
   border-radius: 10px;
   text-shadow: var(--on-glass-shadow);
-}
-
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
-  transform: translateX(-50%);
-  max-width: 86vw;
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: rgba(20, 20, 19, 0.92);
-  color: #f1efe8;
-  font-size: 13px;
-  text-align: center;
-  z-index: 20;
 }
 </style>

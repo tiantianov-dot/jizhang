@@ -3,6 +3,7 @@
  * BackgroundLayer.vue — 上传视频背景（全屏）
  *
  * 只有 kind === 'video' 且未挂起时渲染；与 ImmersiveLayer 互斥。
+ * data-bg / data-video-ready 由 background store 独占写入，这里只上报 ready。
  * 零 backdrop-filter。低电量模式拒绝自动播放时保留首帧 poster，不弹错。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -16,14 +17,10 @@ const visible = computed(
   () => background.kind === 'video' && !background.suspended && !!background.url,
 )
 
-function clearSampling() {
-  delete document.documentElement.dataset.bg
-}
-
 function onLoadedData() {
   const el = videoEl.value
   if (!el) return
-  document.documentElement.dataset.bg = 'video'
+  background.markVideoReady()
   try {
     const canvas = document.createElement('canvas')
     canvas.width = 320
@@ -40,13 +37,9 @@ watch(
   () => background.url,
   () => {
     poster.value = ''
-    clearSampling()
   },
 )
-watch(visible, (value) => {
-  if (!value) clearSampling()
-})
-onBeforeUnmount(clearSampling)
+onBeforeUnmount(() => background.resetVideoReady())
 </script>
 
 <template>

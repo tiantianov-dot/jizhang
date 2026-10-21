@@ -1,91 +1,122 @@
-/* glass.css — 液态玻璃 Token 与全局底色（U1 / V4-1）
- * Token 取自规格 §4.1 定稿；深色覆盖只在 html[data-glass='on'] 下生效。
- * V4-1：面板填充改成极性感知微增光（零 alpha 下限），压暗只由全屏 scrim 承担。
+/* glass.css — V5 液态玻璃唯一材质（token 与样张逐值一致）
+ * 只有一套材质：.gp 与 .card 共用 ::before 高光、::after 冷边圈、单层 backdrop-filter。
+ * 极性只翻文字/边圈/阴影/well/active-fill，不翻填充与模糊。
  */
 
 :root {
-  /* 全局玻璃质感强度：0.3~1.0，驱动 blur/saturate 与面板 alpha */
   --glass-intensity: 1;
+  --glass-alpha: 0.03;
 
-  /* 背景压暗：0~0.6，只被全屏 scrim 与沉浸相机遮罩消费 */
-  --glass-dim: .3;
+  --glass-radius-key: 18px;
+  --glass-radius-panel: 24px;
+  --glass-radius-pill: 999px;
 
-  /* 光照方向全站统一：左上 135°（规格定稿 .14/.04） */
-  --glass-highlight: linear-gradient(135deg,
-      rgba(255,255,255,.14), rgba(255,255,255,.04) 40%, transparent 60%);
-  /* 外投影 + L1 厚度内阴影 */
-  --glass-shadow: 0 8px 24px rgba(0,0,0,.35),
-                  inset 0 1px 1px rgba(255,255,255,.28),
-                  inset 0 -1px 1px rgba(0,0,0,.22),
-                  inset 0 0 12px rgba(255,255,255,.05);
+  --on-glass: rgba(255, 255, 255, 0.97);
+  --on-glass-2: rgba(255, 255, 255, 0.74);
+  --glass-edge: rgba(255, 255, 255, 0.55);
+  --glass-edge-2: rgba(255, 255, 255, 0.16);
+  --glass-edge-3: rgba(255, 255, 255, 0.38);
 
-  /* 小控件描边（不是 L1 亮环） */
-  --glass-hairline: rgba(255,255,255,.14);
+  --glass-highlight:
+    linear-gradient(180deg, rgba(205, 240, 255, 0.22) 0, rgba(205, 240, 255, 0.04) 1.5px, transparent 5px),
+    linear-gradient(0deg, transparent 0, rgba(175, 232, 255, 0.3) 1.5px, transparent 4px),
+    linear-gradient(0deg, rgba(4, 12, 20, 0.06), transparent 20%);
 
-  /* ---- 极性四件套（默认暗极性；亮极性在 html[data-polarity='light'] 覆盖）---- */
-  --panel-fill-rgb: 255,255,255;          /* 暗底：受光 */
-  --scrim-rgb: 6,8,14;
-  --on-glass: rgba(255,255,255,.88);      /* 玻璃上的主文字 */
-  --on-glass-2: rgba(255,255,255,.65);    /* 次级文字：同色相降透明度 */
-  --on-glass-shadow: 0 1px 1px rgba(0,0,0,.75), 0 4px 12px rgba(0,0,0,.55);
-  /* L1 亮环三档：强边 / 过渡 / 右下回光（md 表 .50/.12/.40） */
-  --glass-edge: rgba(255,255,255,.50);
-  --glass-edge-2: rgba(255,255,255,.12);
-  --glass-edge-3: rgba(255,255,255,.40);
+  --glass-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.32),
+    0 8px 18px -8px rgba(0, 0, 0, 0.52),
+    0 22px 38px -24px rgba(0, 0, 0, 0.55),
+    0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    inset 0 1px 1px rgba(205, 240, 255, 0.2),
+    inset 0 -5px 9px rgba(0, 0, 0, 0.3),
+    inset 0 0 0 1px rgba(4, 8, 14, 0.1);
 
-  /* 三档面板填充：线性式、零 alpha 下限；blur/saturate/radius 沿用规格定值 */
-  --g-reg-bg: rgba(var(--panel-fill-rgb), calc(.03 + .09 * var(--glass-intensity)));
-  --g-reg-blur: blur(calc(20px * var(--glass-intensity)))
-                saturate(calc(1 + 0.6 * var(--glass-intensity)));
-  --g-reg-radius: 18px;
+  --glass-lift-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.32),
+    0 6px 14px -7px rgba(0, 0, 0, 0.5),
+    0 16px 26px -18px rgba(0, 0, 0, 0.5),
+    0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    inset 0 1px 1px rgba(205, 240, 255, 0.22),
+    inset 0 -5px 8px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(4, 8, 14, 0.1);
 
-  --g-clr-bg: rgba(var(--panel-fill-rgb), calc(.02 + .05 * var(--glass-intensity)));
-  --g-clr-blur: blur(calc(28px * var(--glass-intensity)))
-                saturate(calc(1 + 0.8 * var(--glass-intensity)));
-  --g-clr-radius: 22px;
+  --glass-press-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    inset 0 2px 6px rgba(160, 215, 240, 0.22),
+    inset 0 -4px 7px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(4, 8, 14, 0.08);
 
-  --g-id-bg: rgba(var(--panel-fill-rgb), calc(.05 + .12 * var(--glass-intensity)));
-  --g-id-blur: blur(calc(16px * var(--glass-intensity)))
-               saturate(calc(1 + 1.1 * var(--glass-intensity)));
-  --g-id-radius: 999px;
-  --g-id-glow: 0 0 20px rgba(255,255,255,.12);   /* 中性光晕，不带色相 */
+  --on-glass-shadow: 0 1px 1px rgba(0, 0, 0, 0.86), 0 4px 14px rgba(0, 0, 0, 0.62);
+
+  --glass-fill: rgba(255, 255, 255, var(--glass-alpha));
+  --glass-well: rgba(0, 0, 0, 0.18);
+  --glass-active-fill: rgba(196, 232, 250, 0.15);
+  --glass-filter: blur(calc(7px * var(--glass-intensity)))
+    saturate(calc(1.08 + 0.3 * var(--glass-intensity)))
+    contrast(calc(1.02 + 0.05 * var(--glass-intensity)));
 }
 
-/* 亮极性：面板从「受光」变「投影」，文字与阴影一起翻面 */
 html[data-polarity='light'] {
-  --panel-fill-rgb: 10,12,14;
-  --scrim-rgb: 246,248,250;
-  --on-glass: rgba(18,18,20,.82);
-  --on-glass-2: rgba(18,18,20,.62);
-  --on-glass-shadow: 0 1px 0 rgba(255,255,255,.6), 0 4px 14px rgba(255,255,255,.45);
-  --glass-edge: rgba(255,255,255,.92);
-  --glass-edge-2: rgba(255,255,255,.30);
-  --glass-edge-3: rgba(255,255,255,.78);
-  --glass-hairline: rgba(10,12,14,.16);
+  --on-glass: rgba(12, 14, 18, 0.96);
+  --on-glass-2: rgba(12, 14, 18, 0.68);
+  --glass-edge: rgba(255, 255, 255, 0.92);
+  --glass-edge-2: rgba(10, 12, 14, 0.16);
+  --glass-edge-3: rgba(255, 255, 255, 0.72);
+
+  --glass-highlight:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0, rgba(255, 255, 255, 0.06) 1.5px, transparent 5px),
+    linear-gradient(0deg, transparent 0, rgba(150, 220, 245, 0.26) 1.5px, transparent 4px),
+    linear-gradient(0deg, rgba(10, 20, 30, 0.04), transparent 20%);
+
+  --glass-shadow:
+    0 1px 1px rgba(18, 26, 38, 0.12),
+    0 8px 18px -8px rgba(18, 26, 38, 0.26),
+    0 22px 38px -24px rgba(18, 26, 38, 0.28),
+    0 0 0 0.5px rgba(10, 12, 14, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.4),
+    inset 0 -5px 9px rgba(10, 16, 22, 0.14),
+    inset 0 0 0 1px rgba(10, 14, 18, 0.05);
+
+  --glass-lift-shadow:
+    0 1px 1px rgba(18, 26, 38, 0.12),
+    0 6px 14px -7px rgba(18, 26, 38, 0.24),
+    0 16px 26px -18px rgba(18, 26, 38, 0.22),
+    0 0 0 0.5px rgba(10, 12, 14, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.42),
+    inset 0 -5px 8px rgba(10, 16, 22, 0.14),
+    inset 0 0 0 1px rgba(10, 14, 18, 0.05);
+
+  --glass-press-shadow:
+    0 1px 2px rgba(18, 26, 38, 0.1),
+    0 0 0 0.5px rgba(10, 12, 14, 0.1),
+    inset 0 2px 6px rgba(255, 255, 255, 0.55),
+    inset 0 -4px 7px rgba(10, 16, 22, 0.1),
+    inset 0 0 0 1px rgba(10, 14, 18, 0.04);
+
+  --on-glass-shadow: 0 1px 0 rgba(255, 255, 255, 0.82), 0 4px 14px rgba(255, 255, 255, 0.48);
+  --glass-well: rgba(10, 12, 14, 0.08);
+  --glass-active-fill: rgba(255, 255, 255, 0.22);
 }
 
-/* 玻璃主题强制深色底；文字与描边跟随极性 */
 html[data-glass='on'] {
-  --bg: #0a0e18;
-  --surface: #222221;
+  --bg: #05070d;
+  --surface: #05070d;
   --text: var(--on-glass);
   --text-secondary: var(--on-glass-2);
-  --border: var(--glass-hairline);
+  --border: var(--glass-edge-2);
   --expense: var(--on-glass);
-  /* 深底语义色（已签字）：#ff8a8a / #ff6b6b / #ffb547 */
   --income: #ff8a8a;
   --danger: #ff6b6b;
   --warning: #ffb547;
-  /* --brand 退出 UI 主色：滑块 accent / .btn / 选中态走中性玻璃档 */
   --brand: #9aa3ad;
   --brand-strong: #c2c9d2;
-  background-color: #0a0e18;
+  background-color: #05070d;
 }
 
 html[data-glass='on'][data-polarity='light'] {
   --brand: #4b515a;
   --brand-strong: #2c3037;
-  /* 亮极性语义色：同色相加深，按亮背板 p50=0.7369 反算 ≥4.5:1 */
   --income: #9a2222;
   --danger: #8a1c1c;
   --warning: #744a00;
@@ -95,14 +126,13 @@ html[data-glass='on'] body {
   background: transparent;
 }
 
-/* 背景：--bg-image 由 main.js 注入（默认星野；上传素材走同一变量）。
- * 纯色 #0a0e18 垫底，图未解码完也不白屏。 */
+/* 唯一背景层：底色 + 上传素材（星野改为程序化 canvas，不再消费 --bg-image） */
 html[data-glass='on'] body::before {
   content: '';
   position: fixed;
   inset: 0;
-  z-index: -4;
-  background-color: #0a0e18;
+  z-index: -5;
+  background-color: #05070d;
   background-image: var(--bg-image, none);
   background-size: cover;
   background-position: center;
@@ -110,79 +140,150 @@ html[data-glass='on'] body::before {
   pointer-events: none;
 }
 
-/* 全屏 scrim：唯一消费 --glass-dim 的页面层（相机遮罩另见 ImmersiveLayer） */
-html[data-glass='on'] body::after {
+/* ---------- 唯一材质 ---------- */
+
+:where(html[data-glass='on']) :is(.gp, .card) {
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: var(--glass-radius-panel);
+  background-color: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  box-shadow: var(--glass-shadow);
+  color: var(--on-glass);
+  text-shadow: var(--on-glass-shadow);
+}
+
+:where(html[data-glass='on']) :is(.gp, .card)::before {
   content: '';
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: -3;
-  background: rgba(var(--scrim-rgb), var(--glass-dim));
+  border-radius: inherit;
+  background-image: var(--glass-highlight);
   pointer-events: none;
 }
 
-/* 亮极性：scrim 至少 .2，避免 dim=0 时亮底直接烧掉文字对比 */
-html[data-glass='on'][data-polarity='light'] body::after {
-  background: rgba(var(--scrim-rgb), max(.2, var(--glass-dim)));
+:where(html[data-glass='on']) :is(.gp, .card)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    180deg,
+    rgba(210, 242, 255, 0.34),
+    rgba(185, 222, 245, 0.12) 18%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(150, 215, 245, 0.3) 84%,
+    rgba(205, 242, 255, 0.42)
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0.9;
+  pointer-events: none;
 }
 
-/* 星点闪烁：只动 opacity；取消 90s 漂移（R4） */
-html[data-glass='on'] .starfield {
-  position: fixed;
+:where(html[data-glass='on']) :is(.gp, .card) > * {
+  position: relative;
+  z-index: 2;
+}
+
+:where(html[data-glass='on']) :is(.gp, .card)[data-blur='off'] {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* 涟漪必须排在 > * 之后，否则会被改成 relative/z2 */
+.ripple-clip {
+  position: absolute;
   inset: 0;
-  z-index: -2;
+  border-radius: inherit;
   overflow: hidden;
   pointer-events: none;
+  z-index: 1;
 }
 
-html[data-glass='on'] .starfield i {
+.ripple-drop {
   position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 4px rgba(255,255,255,.75);
-  opacity: .45;
-  animation: star-twinkle var(--star-dur, 4s) ease-in-out infinite alternate;
-  animation-delay: var(--star-delay, 0s);
+  background: radial-gradient(circle, rgba(210, 245, 255, 0.55), rgba(140, 210, 240, 0.14) 52%, transparent 72%);
+  animation: glass-ripple 0.62s cubic-bezier(0.16, 0.84, 0.3, 1) forwards;
+  pointer-events: none;
 }
 
-@keyframes star-twinkle {
-  from { opacity: .15; }
-  to { opacity: .8; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html[data-glass='on'] .starfield i {
-    animation: none;
-    opacity: .45;
+@keyframes glass-ripple {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(8);
   }
 }
 
-/* 内容背板：零 backdrop-filter；填充只吃 --panel-fill-rgb + intensity */
-html[data-glass='on'] .card {
-  background-color: rgba(var(--panel-fill-rgb), calc(.03 + .09 * var(--glass-intensity)));
-  background-image: var(--glass-highlight);
-  border: 1px solid var(--glass-edge-2);
-  border-radius: var(--g-reg-radius);
-  box-shadow: var(--glass-shadow);
-  text-shadow: var(--on-glass-shadow);
+@media (prefers-reduced-motion: reduce) {
+  .ripple-drop {
+    animation: none;
+    opacity: 0;
+  }
 }
 
-/* 列表行：零 backdrop-filter；与面板同一套填充与极性文字 */
-html[data-glass='on'] .glass-row {
-  background-color: rgba(var(--panel-fill-rgb), calc(.03 + .09 * var(--glass-intensity)));
-  background-image: var(--glass-highlight);
-  border: 1px solid var(--glass-edge-2);
-  box-shadow: var(--glass-shadow);
-  text-shadow: var(--on-glass-shadow);
-}
-
-/* toast 是独立深色胶囊，不跟极性翻面，避免深底黑字 */
-html[data-glass='on'] .toast {
-  background: rgba(20,20,19,.92);
-  border: 1px solid var(--glass-hairline);
+/* 全局 toast：短提示 nowrap；.bg-notice 允许换行且压过撤销 toast */
+:where(html[data-glass='on']) .toast {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(-4px);
+  max-width: 82%;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(20, 20, 19, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   color: #f1efe8;
-  box-shadow: var(--glass-shadow);
+  font-size: 12px;
+  text-shadow: none;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4);
+  opacity: 1;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  white-space: nowrap;
 }
 
-html[data-glass='on'] .mask {
-  background: rgba(0,0,0,.45);
+:where(html[data-glass='on']) .toast.bg-notice {
+  z-index: 30;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.5;
+}
+
+:where(html[data-glass='on']) .mask {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- 真机降级钩子：只允许人工设置属性，应用代码不得写入 ---------- */
+html[data-glass='on'][data-page-scroll='outer'] #app {
+  height: auto;
+  min-height: 100dvh;
+}
+
+html[data-glass='on'][data-page-scroll='outer'] body {
+  overflow-y: auto;
+}
+
+html[data-glass='on'][data-page-scroll='outer'] .page {
+  overflow-y: visible;
+}
+
+html[data-glass='on'][data-glass-degrade='pad-tint'] .pad .key {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background-color: rgba(200, 235, 255, calc(var(--glass-alpha) + 0.06));
 }

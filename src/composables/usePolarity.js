@@ -5,8 +5,8 @@
  * 写 html[data-polarity]，以及订阅 --bg-image 变化后重算。
  * 背景变更的约定：把新的 --bg-image 写在 documentElement 的内联 style 上
  * （V4-2 的上传素材也走这条），MutationObserver 会重新分析。
- * 视频模式由 data-bg='video'（loadeddata 后）触发一次帧采样；
- * 沉浸挂起（data-bg-suspended）期间强制 dark 且不写镜像。
+ * 视频模式只在 data-bg='video' 且 data-video-ready 出现后采样一次；
+ * 等不到 ready 时强制 dark。沉浸挂起（data-bg-suspended）期间强制 dark 且不写镜像。
  */
 import { onMounted, onUnmounted } from 'vue'
 import {
@@ -18,15 +18,6 @@ import {
 const MIRROR_KEY = 'jizhang:uiPolarity'
 const DEFAULT_POLARITY = 'dark'
 const DEBOUNCE_MS = 120
-
-function readMirror() {
-  try {
-    const v = localStorage.getItem(MIRROR_KEY)
-    return v === 'light' || v === 'dark' ? v : ''
-  } catch {
-    return ''
-  }
-}
 
 function writeMirror(polarity) {
   try {
@@ -99,7 +90,14 @@ export function usePolarity() {
     if (isSuspended()) return
     if (document.documentElement.dataset.bg === 'video') {
       const video = document.querySelector('[data-testid="bg-video"]')
-      if (!video || video.readyState < 2) return
+      const ready =
+        document.documentElement.hasAttribute('data-video-ready') &&
+        video &&
+        video.readyState >= 2
+      if (!ready) {
+        applyDetected('dark')
+        return
+      }
       try {
         applyDetected(classifyPolarity(highlightLuminance(sampleImage(video)), detected))
       } catch {
@@ -124,7 +122,7 @@ export function usePolarity() {
   }
 
   onMounted(() => {
-    detected = readMirror() || DEFAULT_POLARITY
+    detected = DEFAULT_POLARITY
     wasPinned = immersivePinned()
     applyEffective()
     analyze()
@@ -134,7 +132,7 @@ export function usePolarity() {
     })
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['style', 'data-bg', 'data-bg-suspended'],
+      attributeFilter: ['style', 'data-bg', 'data-bg-suspended', 'data-video-ready'],
     })
     immersiveObserver = new MutationObserver(() => {
       const pinned = immersivePinned()

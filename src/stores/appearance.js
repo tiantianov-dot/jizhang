@@ -1,20 +1,22 @@
 /**
- * stores/appearance.js — 外观偏好（质感强度 / 背景压暗）
+ * stores/appearance.js — 外观偏好（模糊强度 / 玻璃填充）
  *
- * IndexedDB 是唯一真相源；localStorage 只存强度镜像，供 main.js 首帧防闪。
- * previewIntensity / previewDim 只改 CSS 变量，不持久化 —— U5 场景联动专用。
+ * IndexedDB 是唯一真相源；localStorage 只存强度/填充镜像，供 main.js 首帧防闪。
+ * previewIntensity / previewFill 只改 CSS 变量，不持久化 —— U5 场景联动专用。
  */
 import { defineStore } from 'pinia'
 import * as settingsRepo from '@/repositories/settings'
 
 const INTENSITY_KEY = 'uiGlassIntensity'
-const DIM_KEY = 'uiGlassDim'
-const MIRROR_KEY = 'jizhang:uiGlassIntensity'
+const FILL_KEY = 'uiGlassFill'
+const INTENSITY_MIRROR_KEY = 'jizhang:uiGlassIntensity'
+const FILL_MIRROR_KEY = 'jizhang:uiGlassFill'
 
-const INTENSITY_MIN = 0.3
+const INTENSITY_MIN = 0
 const INTENSITY_MAX = 1
-const DIM_MIN = 0
-const DIM_MAX = 0.6
+const FILL_MIN = 0
+const FILL_MAX = 0.3
+const FILL_DEFAULT = 0.03
 const REDUCED_MIN = 0.7
 const CONTRAST_MIN = 0.85
 
@@ -36,47 +38,56 @@ export function clampIntensity(v) {
   return base
 }
 
-export function clampDim(v) {
+export function clampFill(v) {
   const n = Number(v)
-  return Number.isFinite(n) ? Math.min(DIM_MAX, Math.max(DIM_MIN, n)) : 0.3
+  return Number.isFinite(n) ? Math.min(FILL_MAX, Math.max(FILL_MIN, n)) : FILL_DEFAULT
 }
 
 function applyIntensity(v) {
   document.documentElement.style.setProperty('--glass-intensity', String(v))
 }
 
-function applyDim(v) {
-  document.documentElement.style.setProperty('--glass-dim', String(v))
+function applyFill(v) {
+  document.documentElement.style.setProperty('--glass-alpha', String(v))
 }
 
 function mirrorIntensity(v) {
   try {
-    localStorage.setItem(MIRROR_KEY, String(v))
+    localStorage.setItem(INTENSITY_MIRROR_KEY, String(v))
   } catch {
     // 无痕模式等场景 localStorage 不可用：保持 IDB 真源即可
+  }
+}
+
+function mirrorFill(v) {
+  try {
+    localStorage.setItem(FILL_MIRROR_KEY, String(v))
+  } catch {
+    // 同上
   }
 }
 
 export const useAppearanceStore = defineStore('appearance', {
   state: () => ({
     glassIntensity: 1,
-    glassDim: 0.3,
+    glassFill: FILL_DEFAULT,
   }),
   actions: {
     /** IDB 真值 → 内存 / CSS / 镜像（启动与导入备份后各跑一次） */
     async load() {
-      const [storedIntensity, storedDim] = await Promise.all([
+      const [storedIntensity, storedFill] = await Promise.all([
         settingsRepo.get(INTENSITY_KEY, null),
-        settingsRepo.get(DIM_KEY, null),
+        settingsRepo.get(FILL_KEY, null),
       ])
       this.glassIntensity = clampIntensity(storedIntensity === null ? 1 : storedIntensity)
-      this.glassDim = clampDim(storedDim === null ? 0.3 : storedDim)
+      this.glassFill = clampFill(storedFill === null ? FILL_DEFAULT : storedFill)
       applyIntensity(this.glassIntensity)
-      applyDim(this.glassDim)
+      applyFill(this.glassFill)
       mirrorIntensity(this.glassIntensity)
+      mirrorFill(this.glassFill)
       // 首次启动落库默认值：保证导出白名单里有这两个键（无行时 get 回落）
       if (storedIntensity === null) await settingsRepo.set(INTENSITY_KEY, this.glassIntensity)
-      if (storedDim === null) await settingsRepo.set(DIM_KEY, this.glassDim)
+      if (storedFill === null) await settingsRepo.set(FILL_KEY, this.glassFill)
     },
 
     /** 用户意图写：持久化到 IDB + 镜像 + CSS */
@@ -92,15 +103,16 @@ export const useAppearanceStore = defineStore('appearance', {
       applyIntensity(clampIntensity(v))
     },
 
-    async setDim(v) {
-      this.glassDim = clampDim(v)
-      applyDim(this.glassDim)
-      await settingsRepo.set(DIM_KEY, this.glassDim)
+    async setFill(v) {
+      this.glassFill = clampFill(v)
+      applyFill(this.glassFill)
+      mirrorFill(this.glassFill)
+      await settingsRepo.set(FILL_KEY, this.glassFill)
     },
 
-    /** 背景压暗的临时预览（同样不持久化） */
-    previewDim(v) {
-      applyDim(clampDim(v))
+    /** 填充的临时预览（同样不持久化） */
+    previewFill(v) {
+      applyFill(clampFill(v))
     },
   },
 })

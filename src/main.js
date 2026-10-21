@@ -3,22 +3,30 @@ import { createPinia } from 'pinia'
 
 import App from './App.vue'
 import router from './router'
-import bgStarfield from './assets/bg-starfield.webp'
 import './styles/base.css'
 import './styles/glass.css'
 
-// 玻璃主题与背景图在挂载前就位：背景层可被 V4-2 的上传素材覆盖同一变量
-document.documentElement.dataset.glass = 'on'
-document.documentElement.style.setProperty('--bg-image', `url("${bgStarfield}")`)
+// 首帧属性：CSS/JS 就绪前即为玻璃 + 暗极性 + 程序化星空，避免白闪
+const root = document.documentElement
+root.dataset.glass = 'on'
+root.dataset.polarity = 'dark'
+root.dataset.bg = 'starfield'
+root.style.setProperty('--bg-image', 'none')
 
 // 首帧防闪：IDB 真值稍后由 appearance store 校正，localStorage 只做镜像
 try {
-  const stored = Number(localStorage.getItem('jizhang:uiGlassIntensity'))
-  if (Number.isFinite(stored) && stored >= 0.3 && stored <= 1) {
-    document.documentElement.style.setProperty('--glass-intensity', String(stored))
+  const rawIntensity = localStorage.getItem('jizhang:uiGlassIntensity')
+  const intensity = rawIntensity === null ? NaN : Number(rawIntensity)
+  if (Number.isFinite(intensity) && intensity >= 0 && intensity <= 1) {
+    root.style.setProperty('--glass-intensity', String(intensity))
+  }
+  const rawFill = localStorage.getItem('jizhang:uiGlassFill')
+  const fill = rawFill === null ? NaN : Number(rawFill)
+  if (Number.isFinite(fill) && fill >= 0 && fill <= 0.3) {
+    root.style.setProperty('--glass-alpha', String(fill))
   }
 } catch {
-  // localStorage 不可用时保持默认强度
+  // localStorage 不可用时保持默认强度与填充
 }
 
 const app = createApp(App)

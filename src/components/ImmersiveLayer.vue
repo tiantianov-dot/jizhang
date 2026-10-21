@@ -36,7 +36,7 @@ onMounted(bindStream)
         muted
       />
     </div>
-    <div class="immersive-dim" />
+    <div class="immersive-dim" data-testid="immersive-dim" />
   </div>
 </template>
 
@@ -65,6 +65,6 @@ onMounted(bindStream)
 .immersive-dim {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, var(--glass-dim, 0.3));
+  background: rgba(6, 8, 14, 0.3);
 }
 </style>

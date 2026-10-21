@@ -4,8 +4,7 @@
  *
  * 缓冲状态由父级持有：v-model:buffer 传入金额输入缓冲串（形如 "12.3"），
  * 父级监听 save 事件做校验与写库（键盘只负责输入，不碰数据层）。
- * 输入限制与键位布局沿用记一笔页原有实现：整数 7 位、小数 2 位；
- * ✓ 占最后一列下三格，⌫ 提到最后一列第一格。
+ * 13 个键各自是一块独立玻璃：12 个数字键后接 ✓（第 4 列第 2–4 行）。
  */
 import GlassPanel from './GlassPanel.vue'
 
@@ -14,10 +13,6 @@ const props = defineProps({
   buffer: { type: String, default: '' },
   /** 父级正在写库：期间禁用 ✓，避免连点重复入账 */
   saving: { type: Boolean, default: false },
-  /** ✓ 是否上 identity 真玻璃；编辑页按层预算关闭（arch ④：Edit 常驻仅 2 层） */
-  identity: { type: Boolean, default: true },
-  /** ✓ 是否挂 L2 背景镜像（仅 Add 页） */
-  mirror: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:buffer', 'save'])
@@ -45,15 +40,29 @@ function press(key) {
 
 <template>
   <div class="pad">
-    <button v-for="k in keys" :key="k" class="key" @click="press(k)">
-      {{ k === 'back' ? '⌫' : k }}
-    </button>
-    <button class="key ok" :class="{ plain: !identity }" :disabled="saving" @click="emit('save')">
-      <GlassPanel v-if="identity" tier="identity" class="ok-panel" :mirror="mirror" mirror-name="ok">
-        <span class="ok-label">✓</span>
-      </GlassPanel>
-      <span v-else class="ok-label">✓</span>
-    </button>
+    <GlassPanel
+      v-for="k in keys"
+      :key="k"
+      tag="button"
+      type="button"
+      shape="key"
+      class="key"
+      data-ripple
+      @click="press(k)"
+    >
+      <span class="label">{{ k === 'back' ? '⌫' : k }}</span>
+    </GlassPanel>
+    <GlassPanel
+      tag="button"
+      type="button"
+      shape="key"
+      class="key ok"
+      data-ripple
+      :disabled="saving"
+      @click="emit('save')"
+    >
+      <span class="label">✓</span>
+    </GlassPanel>
   </div>
 </template>
 
@@ -61,76 +70,65 @@ function press(key) {
 .pad {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  grid-auto-rows: 54px;
-  gap: 6px;
+  grid-auto-rows: 52px;
+  gap: 10px;
   margin-top: auto;
+  padding-top: 2px;
 }
 
-.key {
-  /* 键帽跟面板同一套极性感知填充；按压态不再用 alpha（dim=.6 会溢出成纯黑） */
-  background-color: rgba(var(--panel-fill-rgb), calc(.02 + .05 * var(--glass-intensity)));
-  background-image: var(--glass-highlight);
-  border: 1px solid var(--glass-edge-2);
-  border-radius: 10px;
-  color: var(--on-glass);
+.pad .key {
+  appearance: none;
+  -webkit-appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: var(--glass-radius-key);
   font-size: 20px;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
-  text-shadow: var(--on-glass-shadow);
+  color: var(--on-glass);
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: var(--glass-lift-shadow);
+  transition:
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
-.key:active {
-  filter: brightness(1.35);
-  transform: scale(.97);
+.pad .key .label {
+  display: block;
+  pointer-events: none;
+  transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* ✓ 内嵌真玻璃，祖先加 filter 会让 backdrop-filter 失效，只保留按压缩放 */
-.key.ok:active {
-  filter: none;
+.pad .key:active {
+  background-color: rgba(200, 235, 255, calc(var(--glass-alpha) + 0.06));
+  box-shadow: var(--glass-press-shadow);
 }
 
-.key:disabled {
-  opacity: 0.55;
+.pad .key:active .label {
+  transform: scale(0.9);
 }
 
-/* ✓ 占最后一列下三格，材质走 identity 档 */
-.key.ok {
-  position: relative;
+.pad .key.ok {
   grid-column: 4;
   grid-row: 2 / span 3;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--on-glass);
+  border-radius: 24px;
   font-size: 24px;
   font-weight: 600;
 }
 
-.key.ok > .ok-panel {
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-}
-
-.key.ok :deep(.gp-content) {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-}
-
-/* 编辑页的 ✓：同中性玻璃档，不加 backdrop-filter，守住 Edit 常驻 2 层预算 */
-.key.ok.plain {
-  border: 1px solid var(--glass-edge-3);
-  border-radius: 10px;
-  background-color: rgba(var(--panel-fill-rgb), calc(.05 + .12 * var(--glass-intensity)));
-  background-image: var(--glass-highlight);
-  box-shadow: var(--glass-shadow);
-  text-shadow: var(--on-glass-shadow);
-}
-
-/* ⌫ 提到最后一列第一格：调整键位顺序由 CSS grid auto-placement 处理 */
 .pad .key:nth-child(12) {
   grid-column: 4;
   grid-row: 1;
+}
+
+.pad .key:disabled {
+  cursor: default;
+}
+
+.pad .key:disabled .label {
+  opacity: 0.45;
 }
 </style>
