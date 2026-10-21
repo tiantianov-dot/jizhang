@@ -390,7 +390,7 @@ async function doImport(e) {
     #2a2a30;
 }
 
-/* 背景预览卡：零 backdrop-filter、非 fixed（Settings 的 .gp-blur=2 是死断言） */
+/* 背景预览卡：零 backdrop-filter、非 fixed */
 .bg-preview {
   height: 84px;
   margin: 6px 0 10px;
