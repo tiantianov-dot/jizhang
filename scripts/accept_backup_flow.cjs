@@ -164,6 +164,10 @@ const daysAgoIso = (n) => {
   /* ---------- 6. 导入语义：不回滚 lastBackupAt + 白名单按键过滤（含正向预言） ---------- */
   // 导出前先写一个可识别的白名单键，保证备份文件里一定带上它
   await setSettingInDB(page, 'ownerName', 'QA-EXPORT-NAME')
+  // 再造两行「库里确实存在、但绝不该外发」的 settings：V4 遗留的 uiGlassDim（§8.1.1 已删）
+  // 与一个完全未知的键。缺了这两行，下面的 dim 负断言与「⊆ 白名单」会因为库里恰好没有而空转。
+  await setSettingInDB(page, 'uiGlassDim', 0.3)
+  await setSettingInDB(page, 'qaStraySetting', 'should-not-export')
   const dl2Promise = page.waitForEvent('download', { timeout: 8000 })
   await page.click('button:has-text("导出 JSON")')
   const dl2 = await dl2Promise
@@ -174,10 +178,15 @@ const daysAgoIso = (n) => {
   const payload = JSON.parse(payloadText)
   const exportedKeys = (payload.settings || []).map((s) => s.key)
   const WHITELIST = ['monthlyBudget', 'ownerName', 'uiGlassIntensity', 'uiGlassFill']
+  const dimRow = await getSettingInDB(page, 'uiGlassDim')
+  const strayRow = await getSettingInDB(page, 'qaStraySetting')
+  check('★负例前提：库里确有 V4 遗留 uiGlassDim 与未知 qaStraySetting 两行（缺了它们下面两条断言就是空转）',
+    dimRow === 0.3 && strayRow === 'should-not-export', JSON.stringify({ dimRow, strayRow }))
   check('导出不含 lastBackupAt（设备本地备份状态不外发）', !exportedKeys.includes('lastBackupAt'), JSON.stringify(exportedKeys))
   check('导出不含 syncConfig（将来放凭据也不会被打包外发）', !exportedKeys.includes('syncConfig'), JSON.stringify(exportedKeys))
   check('导出 settings ⊆ 白名单四键', exportedKeys.every((k) => WHITELIST.includes(k)), JSON.stringify(exportedKeys))
-  check('导出不含 uiGlassDim（V5 §8.1.1 已删 dim，四键之外的外观键永不外发）', !exportedKeys.includes('uiGlassDim'), JSON.stringify(exportedKeys))
+  check('★导出不含库里的 V4 遗留 uiGlassDim 行（旧备份行也不得被导出）', !exportedKeys.includes('uiGlassDim'), JSON.stringify(exportedKeys))
+  check('★导出不含库里的未知键 qaStraySetting（白名单写成了包含式才抓得住多余键）', !exportedKeys.includes('qaStraySetting'), JSON.stringify(exportedKeys))
 
   await setLastBackupAtInDB(page, daysAgoIso(20))
   // 关键：本地把 ownerName 改成另一个值。若导入是「什么都不写」的空操作，
