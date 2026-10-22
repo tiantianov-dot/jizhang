@@ -6,12 +6,12 @@
 > | 项 | 原计划 | 实际落地 |
 > | --- | --- | --- |
 > | 技术栈 | 原生 HTML+CSS+JS，无构建 | **Vue 3 + Vite + Pinia + vue-router(hash) + vite-plugin-pwa**（JS 非 TS） |
-> | 托管 | GitHub Pages | **WorkBuddy Sites**（现网；真实站点地址不写入本公开仓库，由使用者自行保管并填入 `SHORTCUTS.md` 的 `<你的站点地址>`）**+ GitHub Pages 镜像**（`gh-pages` 已上线，入口为 `assets/index-<hash>.js` 哈希产物，根目录带 `.nojekyll`） |
+> | 托管 | GitHub Pages | **静态托管**（真实站点地址不入库，由使用者自行保管并填入 `SHORTCUTS.md` 的 `<你的站点地址>`；GitHub Pages 子路径需根目录 `.nojekyll`） |
 > | 图表 | Chart.js CDN 或自绘 SVG | **手写 SVG**（DonutChart / BarChart，零依赖） |
 > | 入口通道 A | `webapp://` 带参拉起 PWA | **仍未真机验证**，主推 URL 参数（`#/add?...`）+ 剪贴板 JSON 兜底 |
 > | 快捷指令 | 四条捷径 | 已跑通**截图 OCR 链路**（截屏 → 提取文本 → 正则金额 → 弹窗选金额 → autosave 入账），详见 `SHORTCUTS.md` |
 > | 新增（计划未含） | — | autosave 自动入账+4秒撤销、OCR 脏金额清洗（`services/entry.js` 的 `cleanAmount`） |
-> | 外观与材质（计划未含） | — | **液态玻璃 V4 收口**：强制深色、三档材质（regular/clear/identity）、质感与背景压暗两条滑块（持久化）、背景自适应极性（32×32 降采样 + p88 亮度 + `.45/.32` 迟滞）、深空星野默认背景（静态图 + 星点闪烁，**无漂移**）、自定义背景上传（图片/GIF ≤8 MB、视频 ≤30 MB，OPFS 存字节、**不进备份**、换机回落星空）、沉浸取景与 L2 背景镜像仅限记一笔页。维护口径见 README「外观与材质」 |
+> | 外观与材质（计划未含） | — | **液态玻璃 V5 定稿**：强制深色、单一材质（`.gp`/`.card` 共用高光、边圈与唯一 backdrop-filter；无材质档位）、模糊强度与玻璃填充两条滑块（持久化）、自适应极性（cover 裁剪 → 32×32 → p88 亮度 + `.45/.32` 迟滞）、程序化星空（canvas，种子 42，无图片素材）、自定义背景上传（图片/GIF ≤8 MB、视频 ≤30 MB；图片/GIF 有分辨率门，旧低分素材非破坏迁移；视频只限体积；OPFS 存字节、**不进备份**、换机回落星空）、沉浸取景仅记一笔页。维护口径见 README「外观与材质」 |
 >
 > 阅读建议：先读 README.md（当前真实架构与约定），再回看本文件理解「为什么这么设计」。
 
@@ -58,8 +58,9 @@
 - `records`：`{ id(uuid), amount(分,整数), type(expense|income), categoryId, note, date(YYYY-MM-DD), createdAt, updatedAt, deleted(false), private(false) }`
 - `categories`：`{ id, name, emoji, color, monthlyBudget(分, 0=不设), order, archived, lastUsedAt }`
 - `settings`：`{ monthlyBudget, ownerName, partnerName?, syncConfig?（预留） }`
-  —— 外观落地后另含 `uiGlassIntensity` / `uiGlassDim`（进导出白名单）与 `uiBackground`（背景描述符，
-  素材字节在 OPFS；**不进备份**，换机回落星空）
+  —— 外观落地后另含 `uiGlassIntensity`（0–1）与 `uiGlassFill`（0–0.3，默认 0.03）（进导出白名单），
+  以及 `uiBackground`（背景描述符 `{kind,mime,size,updatedAt,width?,height?}`，素材字节在 OPFS；
+  **不进备份**，换机回落星空）
 
 要点：
 
@@ -69,10 +70,69 @@
 
 ## 页面结构（底部 Tab，手机触控优先）
 
+全局外壳：底部是**悬浮胶囊底栏**（`fixed`，左右 12px、底 `10px + safe-area`、高 58px、最大宽 496px、
+内边距 4px、全圆角）。页面统一用 `.page`，底部留白 = `--tabbar-h 58px` + `--tabbar-gap 10px` +
+safe-area + `--page-bottom-gap 34px`；新增页面不得写死底部 padding。
+
 1. **记一笔**（主 Tab，打开即达）：金额数字键盘 + 分类大按钮平铺（≤一屏、最近使用排序、默认选中上次的分类）+ 备注可选 + 保存 toast（可撤销）
 2. **流水**：按天分组、关键词搜索、分类/月份筛选、进入编辑/删除（软删除）
 3. **统计**：月度收支总览、分类占比环图、每日支出柱图、预算进度（80% 黄 / 超支红）
 4. **设置**：分类管理（增删改/排序/emoji）、预算设置、导出/导入 JSON、快捷指令配置指引入口
+
+## 外观与材质实现（V5 定稿，2026-10-22）
+
+### 单一材质与 Token
+
+全站只有一套材质：`.gp`（`GlassPanel`）与 `.card` 共用 `::before` 高光、`::after` 冷边圈和唯一的
+`backdrop-filter`；`GlassPanel` 只决定形状（panel / key / chip / pill）与 `data-blur` 开关。
+填充与模糊是两个独立维度：强度管 filter，填充管底色 alpha。
+
+| Token | 默认值 | 作用 |
+| --- | --- | --- |
+| `--glass-intensity` | `1`（滑块 0–1） | `blur` / `saturate` / `contrast` 的系数 |
+| `--glass-alpha` | `0.03`（滑块 0–0.3） | 玻璃填充透明度，越低越透 |
+| `--glass-fill` | `rgba(255,255,255,var(--glass-alpha))` | 面板底色 |
+| `--glass-filter` | `blur(calc(7px * I)) saturate(calc(1.08 + .3 * I)) contrast(calc(1.02 + .05 * I))`，`I = --glass-intensity` | 全站唯一 backdrop-filter |
+| `--glass-radius-panel` / `--glass-radius-key` / `--glass-radius-pill` | `24px` / `18px` / `999px` | 头卡与列表卡 / 数字键 / 底栏；chip 在 `GlassPanel` 内为 `14px` |
+| `--on-glass` / `--on-glass-2` | `rgba(255,255,255,.97)` / `.74` | 主 / 次文字与图标 |
+| `--glass-edge` / `-2` / `-3` | `.55` / `.16` / `.38` | 高光边 / 分隔边 / 反光边 |
+| `--glass-highlight` | 顶部 1.5px 冷光 + 底部 1.5px 反光 + 底部暗角（三段 `linear-gradient`） | `::before` 高光 |
+| `--glass-shadow` / `lift` / `press` | 三层外投影 + 内高光 + 内压暗 + 0.5px 白边 | 面板 / 按键 / 按下 |
+| `--glass-well` | `rgba(0,0,0,.18)` | 输入井 |
+| `--glass-active-fill` | `rgba(196,232,250,.15)` | 选中态填充 |
+
+亮极性（`html[data-polarity='light']`）重写文字 `.96/.68`、输入井 `.08`、active 填充 `.22`，并调整
+边圈 / 阴影 / 高光与语义色；填充 alpha 与 filter **不变**。
+
+### 结构与维护约束
+
+- **不写死层数**：数字键盘 13 个键各自一块独立玻璃（12 键 + ✓），禁止合并成整块。
+- 长列表、表单与设置页外观卡使用 `data-blur="off"`（`ListView` / `CategoriesView` / `CategoryForm` /
+  `CategoryBudgetList` / 设置外观卡），控制同时合成层数量。
+- 不得恢复全屏遮罩式假玻璃（旧方案已删除）；材质只来自 `.gp` / `.card`。
+- 拖动滑块只 preview、`change` 才写入 IDB；`previewIntensity` / `previewFill` 不得持久化。
+
+### 自适应极性、背景与底栏
+
+- **极性**：cover 裁剪 → 32×32 降采样 → WCAG 相对亮度 p88 → `.45/.32` 迟滞；首帧 `dark`；
+  星空 / 无背景 / 挂起 / 沉浸 / 视频未就绪保持 `dark`；GIF 只取首帧，视频在 `data-video-ready` 且
+  `readyState >= 2` 后采样；resize / orientationchange 120 ms 防抖。
+- **程序化星空**：canvas 由 `services/starfield.js` 绘制（种子 42、按面积 160–420 颗、7 颗十字星、暗角），
+  只挂载与视口变化时重绘，无 rAF、无漂移，DPR 上限 3；16 个 CSS 星点负责闪烁，reduced-motion 时静止。
+- **自定义背景**：图片 / GIF ≤8 MB、视频 ≤30 MB；字节在 OPFS，`settings.uiBackground` 只存描述符；
+  不进备份。图片 / GIF 分辨率门要求宽高均 ≥ 触屏长边 × DPR（桌面为视口宽高 × DPR）；旧低分素材
+  保留字节与描述符、本次回落星空、下次启动复核（非破坏迁移）。视频**不做**分辨率门，仅限体积，
+  宽高只用于展示。
+- **底栏**：悬浮胶囊（fixed，左右 12px、底 `10px + safe-area`、高 58px、最大宽 496px、内边距 4px），
+  `.page` 底部留白消费 `--tabbar-h` / `--tabbar-gap` / `--page-bottom-gap`。
+
+### 无障碍与离线
+
+- **涟漪降级是有意偏差**：`prefers-reduced-motion: reduce` 时 `useGlassRipple` 不创建水波，
+  CSS 同时隐藏 `.ripple-drop`。这一条不要求与参考稿逐帧一致。
+- 首帧：`index.html` 直接写 `data-glass='on' data-polarity='dark' data-bg='starfield'` 并内联
+  `#05070d`；manifest 的 `theme_color/background_color` 为 `#05070d`。
+- 离线：`workbox.globPatterns` 只收 `**/*.{js,css,html}`；新增图片类资源必须显式加入，否则不进 precache。
 
 ## 快捷指令（iOS 端交付物：逐条配置文档 + 协议说明）
 
@@ -97,8 +157,8 @@ AI 接口预留：快捷指令里「解析」独立成块，后期可整块替�
 2. PWA 独立存储下 IndexedDB 的持久化表现（iOS 对长期未用的 Web App 有清理策略 → 导出备份必须显眼）
 3. PWA 内 `navigator.clipboard.readText` 的授权弹窗体验 —— **已验证可用**
 4. iOS「从图像提取文本」对微信/支付宝支付完成页的中文金额识别准确率 —— **已验证可用**
-5. GitHub Pages + manifest + sw 在 iOS 主屏幕的 standalone 全屏表现 —— **WorkBuddy Sites 下已验证**；
-   GitHub Pages 镜像已上线（含 `.nojekyll`），**该镜像在 iPhone 主屏幕的 standalone 表现尚未真机验证**
+5. PWA（manifest + service worker）在 iOS 主屏幕的 standalone 全屏表现 —— **静态托管环境下已验证**；
+   不同托管域名 / 子路径仍建议按目标环境复核
 
 ## 参考项目
 
