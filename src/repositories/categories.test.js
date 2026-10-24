@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { atomicWrite, getAll, getOne, initDB, putOne } from '@/db'
+import { atomicWrite, getAll, getOne, initDB } from '@/db'
 import { resetDatabase } from '@/db/testIsolation'
 import {
   archiveOrRemoveOne,
@@ -17,7 +17,6 @@ import {
 import { getBuiltinById } from '@/services/builtinCategories'
 
 const FOOD = getBuiltinById('builtin:expense:food')
-const SALARY = getBuiltinById('builtin:income:salary')
 
 async function fresh() {
   await resetDatabase()
