@@ -12,6 +12,7 @@ import { coverRequirement } from '@/services/background'
 import { drawStarfield } from '@/services/starfield'
 import { backupAgeDays, getBackupStatus } from '@/services/backupStatus'
 import { classifyShareOutcome, shouldPersistBackup } from '@/services/backupExport'
+import { summarizeBackup } from '@/services/backupSummary'
 
 const settings = useSettingsStore()
 const records = useRecordsStore()
@@ -87,7 +88,10 @@ function drawPreview() {
   drawStarfield(ctx, 390, 800)
 }
 
-onMounted(() => nextTick(drawPreview))
+onMounted(async () => {
+  nextTick(drawPreview)
+  await refreshBackupCounts()
+})
 watch(
   () => background.kind,
   () => nextTick(drawPreview),
@@ -198,6 +202,24 @@ async function toggleReminder() {
 
 const exportBusy = ref(false)
 const downloadPending = ref(false)
+const backupCounts = ref(null)
+
+/** 与导出同源：直接统计 exportAll 的 records，避免和列表的有效账目口径混淆 */
+async function refreshBackupCounts() {
+  try {
+    const data = await backup.exportAll()
+    backupCounts.value = summarizeBackup(data.records)
+  } catch {
+    backupCounts.value = null
+  }
+}
+
+// 冷启动直接进设置页时，本组件挂载早于 App.vue 的 initDB/load：
+// 等 store 到位后再取一次，避免计数区因数据库未就绪而缺失。
+watch(
+  () => [records.list.length, categories.list.length],
+  () => refreshBackupCounts(),
+)
 
 /** 只在文件确实已生成后调用；持久化失败不能显示成备份成功 */
 async function persistBackupTime() {
@@ -216,6 +238,7 @@ async function doExport() {
   exportBusy.value = true
   try {
     const data = await backup.exportAll()
+    backupCounts.value = summarizeBackup(data.records)
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const file = new File([blob], `jizhang-backup-${stampNow()}.json`, {
       type: 'application/json',
@@ -311,6 +334,7 @@ async function confirmImport() {
   try {
     const summary = await backup.importMerge(pendingImport.value.payload)
     await Promise.all([records.load(), categories.load(), settings.load(), appearance.load()])
+    await refreshBackupCounts()
     pendingImport.value = null
     msg.value = `导入完成：${importSummaryText(summary)}`
   } catch (err) {
@@ -494,6 +518,14 @@ async function confirmImport() {
           {{ settings.backupReminderEnabled ? '已开启' : '已关闭' }}
         </button>
       </div>
+      <p v-if="backupCounts" class="backup-disclosure" data-testid="backup-counts">
+        有效 {{ backupCounts.active }} · 回收站 {{ backupCounts.deleted }} · 本机标记
+        {{ backupCounts.private }} · 备份总计 {{ backupCounts.total }}
+      </p>
+      <p v-if="backupCounts" class="backup-disclosure dim">
+        列表只显示有效账目（{{ records.count }} 条）；回收站与 🔒
+        本机标记记录仍会写入完整备份，用于换机完整恢复，不代表加密或密码保护。
+      </p>
       <div class="row">
         <button class="btn" :disabled="exportBusy" data-testid="backup-export" @click="doExport">
           {{ exportBusy ? '导出中…' : '导出 JSON' }}
@@ -521,6 +553,10 @@ async function confirmImport() {
           账目：新增 {{ pendingImport.summary.records.added }} · 更新
           {{ pendingImport.summary.records.updated }} · 跳过
           {{ pendingImport.summary.records.skipped }}
+        </p>
+        <p class="preview-line">
+          其中软删：新增 {{ pendingImport.summary.records.softDeleted.added }} · 更新
+          {{ pendingImport.summary.records.softDeleted.updated }}（导入后仍在回收站）
         </p>
         <p class="preview-line">
           分类：新增 {{ pendingImport.summary.categories.added }} · 匹配
@@ -697,6 +733,13 @@ async function confirmImport() {
 .bstat {
   justify-content: flex-start;
   font-size: 13px;
+}
+
+.backup-disclosure {
+  margin: 2px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 
 .import-preview {

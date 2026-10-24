@@ -59,7 +59,7 @@ function emptyWrites() {
 
 function emptySummary() {
   return {
-    records: { added: 0, updated: 0, skipped: 0 },
+    records: { added: 0, updated: 0, skipped: 0, softDeleted: { added: 0, updated: 0 } },
     categories: { added: 0, matched: 0, updated: 0, skipped: 0, conflicts: 0 },
     settings: { updated: 0, skipped: 0 },
     conflicts: [],
@@ -262,9 +262,12 @@ export function planImport(payload, local = {}) {
     if (!local) {
       recordWrites.push(value)
       summary.records.added += 1
+      if (value.deleted) summary.records.softDeleted.added += 1
     } else if (rec.updatedAt > (local.updatedAt || 0)) {
-      recordWrites.push(mergeRecordForUpdate(local, value, rawRecordById.get(rec.id)))
+      const merged = mergeRecordForUpdate(local, value, rawRecordById.get(rec.id))
+      recordWrites.push(merged)
       summary.records.updated += 1
+      if (merged.deleted) summary.records.softDeleted.updated += 1
     } else {
       summary.records.skipped += 1
     }

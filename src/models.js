@@ -4,7 +4,7 @@
  * 约定（不可破坏）：
  * - 金额一律以「分」存整数，3550 表示 ¥35.50，禁止浮点运算
  * - id / updatedAt / deleted 是后期双人同步的合并依据，字段名不可改
- * - private = true 的账目只存本地、永不参与将来的双人同步（防同步泄露）
+ * - private = true 的账目带本机标记：完整备份仍包含；将来同步时跳过（不代表加密或密码保护）
  * - categories.lastUsedAt 是本地使用信号，不参与同步；刷新它不得同时刷新 updatedAt
  * - 备份格式 version 2；内置分类用固定 ID（builtin:<type>:<key>），自定义仍为 uuid
  * - builtinIdentityVersion / seedVersion / lastBackupAt 是本地状态，永不导出
@@ -20,7 +20,7 @@
  * @property {number}  updatedAt  最后修改时间戳 ms（同步合并依据：新者胜）
  * @property {boolean} deleted    软删除标记（records 永不硬删）
  * @property {number|null} deletedAt 软删除时间戳 ms（null = 未删除；墓碑回收依据）
- * @property {boolean} private    私密账单：只存本地，永不同步
+ * @property {boolean} private    本机标记：完整备份仍包含；不代表加密或密码保护
  * @property {'me'|'partner'} owner 记录归属（三视角用；旧数据缺失时按 'me' 处理）
  *
  * @typedef {Object} Category 分类
@@ -37,8 +37,10 @@
  * @property {number}  updatedAt     最后修改时间戳 ms
  *
  * @typedef {Object} SettingRow 设置行（key-value 存储）
- * @property {string} key   设置名：'monthlyBudget' | 'ownerName' | 'lastBackupAt' | 'partnerName' | 'syncConfig'
- *                          本机标记：'seedVersion' | 'builtinIdentityVersion'（永不导出/导入）
+ * @property {string} key   设置名：'monthlyBudget' | 'ownerName' | 'lastBackupAt'
+ *                          | 'backupReminderDays' | 'backupReminderEnabled'
+ *                          | 'partnerName' | 'syncConfig'
+ *                          本机状态：'lastBackupAt' | 'seedVersion' | 'builtinIdentityVersion'（永不导出/导入）
  * @property {*}      value 设置值（monthlyBudget 为分；syncConfig 为 Phase 3 预留对象）
  * @property {number} updatedAt 最后写入时间戳 ms（同步合并依据；旧行可能缺失，视为 0）
  */

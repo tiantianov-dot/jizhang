@@ -32,7 +32,7 @@ const buffer = ref('') // 金额输入缓冲（字符串，形如 "12.3"）
 const categoryId = ref('')
 const note = ref('')
 const date = ref(todayStr())
-const isPrivate = ref(false) // 私密账单：只存本地，永不同步（Phase 3 同步时跳过）
+const isPrivate = ref(false) // 本机标记：完整备份仍包含，不代表加密或密码保护
 const saving = ref(false) // 写库期间禁用 ✓，避免连点重复入账
 const toast = ref('')
 
@@ -313,7 +313,8 @@ async function undo() {
         <button
           class="lock pill"
           :class="{ on: isPrivate }"
-          title="私密账单：不同步"
+          title="本机标记：完整备份仍包含；不代表加密或密码保护"
+          aria-label="本机标记：完整备份仍包含；不代表加密或密码保护"
           @click="isPrivate = !isPrivate"
         >
           {{ isPrivate ? '🔒' : '🔓' }}

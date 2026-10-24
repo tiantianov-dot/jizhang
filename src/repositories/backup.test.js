@@ -6,6 +6,7 @@ import { resetDatabase, snapshotJSON } from '@/db/testIsolation'
 import { exportAll, importMerge, previewImport } from '@/repositories/backup'
 import { remove, save } from '@/repositories/categories'
 import { ImportValidationError } from '@/services/importPlanner'
+import { summarizeBackup } from '@/services/backupSummary'
 import { BUILTIN_CATEGORIES, getBuiltinById } from '@/services/builtinCategories'
 
 const FOOD = getBuiltinById('builtin:expense:food')
@@ -107,6 +108,36 @@ test('导出为 v2：含软删/private，settings 白名单排除本机标记', 
 
   const syncData = await exportAll({ purpose: 'sync' })
   assert.deepEqual(syncData.records.map((r) => r.id).sort(), ['active', 'deleted'])
+})
+
+test('完整备份保留软删与 private，披露计数与 payload 数组逐项一致', async () => {
+  await fresh()
+  await putOne('records', record({ id: 'active', updatedAt: 1 }))
+  await putOne('records', record({ id: 'tomb', deleted: true, deletedAt: 5, updatedAt: 5 }))
+  await putOne('records', record({ id: 'secret', private: true, updatedAt: 2 }))
+  await putOne(
+    'records',
+    record({ id: 'secret-tomb', deleted: true, deletedAt: 6, private: true, updatedAt: 6 }),
+  )
+
+  const data = await exportAll()
+  assert.deepEqual(data.records.map((r) => r.id).sort(), [
+    'active',
+    'secret',
+    'secret-tomb',
+    'tomb',
+  ])
+  assert.equal(data.records.find((r) => r.id === 'tomb').deleted, true)
+  assert.equal(data.records.find((r) => r.id === 'secret').private, true)
+  assert.equal(data.records.find((r) => r.id === 'secret-tomb').deleted, true)
+  assert.equal(data.records.find((r) => r.id === 'secret-tomb').private, true)
+
+  const summary = summarizeBackup(data.records)
+  assert.equal(summary.total, data.records.length)
+  assert.equal(summary.active, data.records.filter((r) => r.deleted !== true).length)
+  assert.equal(summary.deleted, data.records.filter((r) => r.deleted === true).length)
+  assert.equal(summary.private, data.records.filter((r) => r.private === true).length)
+  assert.deepEqual(summary, { active: 2, deleted: 2, private: 2, total: 4 })
 })
 
 test('previewImport 只读：summary 正确且三 store 快照不变', async () => {

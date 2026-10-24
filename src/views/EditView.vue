@@ -202,7 +202,8 @@ async function remove() {
         <button
           class="lock pill"
           :class="{ on: isPrivate }"
-          title="私密账单：不同步"
+          title="本机标记：完整备份仍包含；不代表加密或密码保护"
+          aria-label="本机标记：完整备份仍包含；不代表加密或密码保护"
           @click="isPrivate = !isPrivate"
         >
           {{ isPrivate ? '🔒' : '🔓' }}

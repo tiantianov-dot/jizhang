@@ -472,3 +472,50 @@ test('自定义分类同 ID 更新时保留本地 lastUsedAt/createdAt', () => {
   assert.equal(out.writes.categories[0].lastUsedAt, 42)
   assert.equal(out.writes.categories[0].createdAt, 5)
 })
+
+test('summary 区分新增/更新中的软删数量', () => {
+  const food = getBuiltinById('builtin:expense:food')
+  const local = {
+    localCategories: builtinLocal(),
+    localRecords: [
+      record({ id: 'upd-tomb', categoryId: food.id, updatedAt: 10 }),
+      record({ id: 'upd-active', categoryId: food.id, updatedAt: 10, deleted: true, deletedAt: 9 }),
+      record({ id: 'old', categoryId: food.id, updatedAt: 10 }),
+    ],
+    localSettings: [],
+  }
+  const out = planImport(
+    payload({
+      version: 2,
+      records: [
+        record({
+          id: 'new-tomb',
+          categoryId: food.id,
+          updatedAt: 10,
+          deleted: true,
+          deletedAt: 10,
+        }),
+        record({ id: 'new-active', categoryId: food.id, updatedAt: 10 }),
+        record({
+          id: 'upd-tomb',
+          categoryId: food.id,
+          updatedAt: 11,
+          deleted: true,
+          deletedAt: 11,
+        }),
+        record({ id: 'upd-active', categoryId: food.id, updatedAt: 12, deleted: false }),
+        record({ id: 'old', categoryId: food.id, updatedAt: 5 }),
+      ],
+    }),
+    local,
+  )
+  assert.deepEqual(out.errors, [])
+  assert.deepEqual(out.summary.records, {
+    added: 2,
+    updated: 2,
+    skipped: 1,
+    softDeleted: { added: 1, updated: 1 },
+  })
+  assert.equal(out.writes.records.find((r) => r.id === 'new-tomb').deleted, true)
+  assert.equal(out.writes.records.find((r) => r.id === 'upd-active').deleted, false)
+})
