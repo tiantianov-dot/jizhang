@@ -6,8 +6,8 @@
  * 字段含义见 src/models.js 的 Category typedef。
  */
 
-import { uuid, putOne, getOne, getAll, deleteOne } from '@/db'
-import { countByCategory } from './records'
+import { uuid, putOne, getOne, getAll, deleteOne, atomicWrite } from '@/db'
+import { aggregateCategoryUsage, categoryUsage, planCategoryMigration } from './records'
 import { getBuiltinById, isBuiltinId } from '@/services/builtinCategories'
 
 /** 未归档分类列表：最近使用排前，未用过的按 order（记账/编辑页分类格用） */
@@ -56,16 +56,106 @@ export async function save(cat) {
  * @returns {Promise<'archived'|'deleted'>} 有流水引用 → 归档；无引用 → 硬删
  */
 export async function remove(id) {
-  const cat = await getOne('categories', id)
+  const [cat, usage] = await Promise.all([getOne('categories', id), categoryUsage()])
   if (!cat) throw new Error('分类不存在')
+  return archiveOrRemoveCategory(cat, usage)
+}
+
+/** 单分类归档/删除（供 remove 与 bulk 复用；内置保护在此再验一次） */
+async function archiveOrRemoveCategory(cat, usageById) {
   if (isBuiltinId(cat.id)) throw new Error('内置分类受保护，不能删除')
-  const used = await countByCategory(id)
+  const used = usageById.get(cat.id)?.total || 0
   if (used > 0) {
-    cat.archived = true
-    cat.updatedAt = Date.now()
-    await putOne('categories', cat)
+    await putOne('categories', { ...cat, archived: true, updatedAt: Date.now() })
     return 'archived'
   }
-  await deleteOne('categories', id)
+  await deleteOne('categories', cat.id)
   return 'deleted'
+}
+
+/** @returns {Promise<'archived'|'deleted'>} */
+export async function archiveOrRemoveOne(id) {
+  const [cat, usage] = await Promise.all([getOne('categories', id), categoryUsage()])
+  if (!cat) throw new Error('分类不存在')
+  return archiveOrRemoveCategory(cat, usage)
+}
+
+/**
+ * 迁移一个分类的全部 active + 软删账目到目标，再硬删已归零的源分类。
+ * 同 type、目标未归档、目标不在源集合；不写目标分类，故不刷新 lastUsedAt。
+ * @returns {Promise<'migrated-deleted'>}
+ */
+export async function migrateAndRemoveOne(sourceId, targetId) {
+  const [source, target, records] = await Promise.all([
+    getOne('categories', sourceId),
+    getOne('categories', targetId),
+    getAll('records'),
+  ])
+  const result = await migrateAndRemoveCategory(source, target, records)
+  return result.status
+}
+
+async function migrateAndRemoveCategory(source, target, records) {
+  if (!source) throw new Error('源分类不存在')
+  if (!target) throw new Error('迁移目标不存在')
+  if (isBuiltinId(source.id)) throw new Error('内置分类受保护，不能删除')
+  if (source.id === target.id) throw new Error('目标不能是源分类本身')
+  if (target.archived) throw new Error('迁移目标已归档')
+  if (target.type !== source.type) throw new Error('迁移目标收支类型不一致')
+
+  const recordWrites = planCategoryMigration(records, source.id, target.id)
+  await atomicWrite({
+    puts: { records: recordWrites },
+    deletes: { categories: [source.id] },
+  })
+  return { status: 'migrated-deleted', migrated: recordWrites.length }
+}
+
+/**
+ * 批量分类操作。每个源分类独立事务：单项失败只回滚该项并继续。
+ * @param {{ids: string[], mode: 'archive-remove'|'migrate-remove', targetId?: string}} params
+ * @returns {Promise<{results: {id: string, status: string, error?: string, migrated?: number}[]}>}
+ */
+export async function bulkCategories({ ids, mode, targetId } = {}) {
+  const uniqueIds = Array.isArray(ids)
+    ? [...new Set(ids.filter((id) => typeof id === 'string' && id))]
+    : []
+  if (!uniqueIds.length) return { results: [] }
+  if (mode !== 'archive-remove' && mode !== 'migrate-remove') {
+    throw new Error('未知的批量操作类型')
+  }
+  if (mode === 'migrate-remove' && !targetId) throw new Error('先选择迁移目标')
+  if (mode === 'migrate-remove' && uniqueIds.includes(targetId)) {
+    throw new Error('迁移目标不能在被选分类中')
+  }
+
+  const [allCategories, records] = await Promise.all([getAll('categories'), getAll('records')])
+  const catById = new Map(allCategories.map((cat) => [cat.id, cat]))
+  const usageById = aggregateCategoryUsage(records)
+  const target = targetId ? catById.get(targetId) : null
+  const results = []
+
+  for (const id of uniqueIds) {
+    if (isBuiltinId(id)) {
+      results.push({ id, status: 'protected', error: '内置分类受保护，不能删除' })
+      continue
+    }
+    const cat = catById.get(id)
+    if (!cat) {
+      results.push({ id, status: 'failed', error: '分类不存在' })
+      continue
+    }
+    try {
+      if (mode === 'archive-remove') {
+        const status = await archiveOrRemoveCategory(cat, usageById)
+        results.push({ id, status })
+      } else {
+        const out = await migrateAndRemoveCategory(cat, target, records)
+        results.push({ id, status: out.status, migrated: out.migrated })
+      }
+    } catch (err) {
+      results.push({ id, status: 'failed', error: err.message })
+    }
+  }
+  return { results }
 }

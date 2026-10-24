@@ -6,7 +6,7 @@
  * 字段含义见 src/models.js 的 RecordItem typedef。
  */
 
-import { uuid, putOne, getOne, getAll, countByIndex, atomicWrite } from '@/db'
+import { uuid, putOne, getOne, getAll, atomicWrite } from '@/db'
 import { todayStr } from '@/utils/format'
 import { tagWriteError } from '@/services/writeOutcome'
 
@@ -91,7 +91,36 @@ export async function list() {
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt))
 }
 
-/** 引用某分类的记录数（分类删除策略用：>0 只归档不硬删） */
-export async function countByCategory(categoryId) {
-  return countByIndex('records', 'categoryId', categoryId)
+/**
+ * 一次全量聚合各分类的引用数（含软删）。批量操作禁止对 N 个分类发 N 次 count。
+ * @param {object[]} records
+ * @returns {Map<string, {active: number, deleted: number, total: number}>}
+ */
+export function aggregateCategoryUsage(records) {
+  const usage = new Map()
+  for (const record of records) {
+    if (!record || typeof record.categoryId !== 'string' || !record.categoryId) continue
+    const row = usage.get(record.categoryId) || { active: 0, deleted: 0, total: 0 }
+    if (record.deleted) row.deleted += 1
+    else row.active += 1
+    row.total += 1
+    usage.set(record.categoryId, row)
+  }
+  return usage
+}
+
+/** 全量读取后聚合引用数（单次 getAll） */
+export async function categoryUsage() {
+  return aggregateCategoryUsage(await getAll('records'))
+}
+
+/**
+ * 分类迁移的写计划：active + 软删记录全部改挂目标分类，并刷新 updatedAt。
+ * 不写目标分类，因此不会刷新目标 lastUsedAt。
+ * @returns {object[]}
+ */
+export function planCategoryMigration(records, sourceId, targetId, now = Date.now()) {
+  return records
+    .filter((record) => record && record.categoryId === sourceId)
+    .map((record) => ({ ...record, categoryId: targetId, updatedAt: now }))
 }
