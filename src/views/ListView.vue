@@ -192,7 +192,12 @@ onUnmounted(() => clearTimeout(undoTimer))
               <span class="cat">{{ catOf(r)?.name || '未分类' }}</span>
               <span v-if="r.note" class="note">{{ r.note }}</span>
             </span>
-            <span v-if="r.private" class="lock" title="私密账单">🔒</span>
+            <span
+              v-if="r.private"
+              class="lock"
+              title="本机标记：完整备份仍包含；不代表加密或密码保护"
+              aria-label="本机标记：完整备份仍包含；不代表加密或密码保护"
+            >本</span>
             <span class="amt" :class="r.type">
               {{ r.type === 'expense' ? '-' : '+' }}{{ fenToYuan(r.amount) }}
             </span>
