@@ -90,11 +90,20 @@ const rowOf = (page, text) => page.locator('.row', { hasText: text })
   await page.click('.btn.add')
   await page.fill('.form .field:has-text("名称") .input', '临时')
   await page.click('.form .acts .btn:not(.ghost)')
-  await page.waitForSelector('.toast')
+  await page.waitForFunction(
+    () => document.querySelector('.toast')?.textContent.includes('已新增'),
+    undefined,
+    { timeout: 8000 },
+  )
   await rowOf(page, '临时').locator('.act').click()
+  await page.waitForSelector('.form .del')
   await page.click('.form .del')
   await page.click('.form .del')
-  await page.waitForSelector('.toast')
+  await page.waitForFunction(
+    () => document.querySelector('.toast')?.textContent.includes('已删除'),
+    undefined,
+    { timeout: 8000 },
+  )
   const hardDelMsg = await page.textContent('.toast')
   check('无引用 → 彻底删除', hardDelMsg.includes('已删除') && !hardDelMsg.includes('归档'), hardDelMsg.trim())
   await page.waitForTimeout(300)
