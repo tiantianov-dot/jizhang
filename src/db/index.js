@@ -38,11 +38,25 @@ export function open() {
       }
     }
     req.onsuccess = () => {
-      _db = req.result
+      const db = req.result
+      // 其它连接请求升级时主动让路，避免旧标签页阻塞迁移
+      db.onversionchange = () => {
+        db.close()
+        if (_db === db) _db = null
+      }
+      _db = db
       resolve(_db)
     }
     req.onerror = () => reject(req.error)
   })
+}
+
+/** 关闭并置空连接（测试隔离 / 需要重新打开时使用） */
+export async function close() {
+  if (!_db) return
+  const db = _db
+  _db = null
+  db.close()
 }
 
 /** IDBRequest → Promise */
@@ -60,7 +74,17 @@ export function tx(store, mode, fn) {
       new Promise((resolve, reject) => {
         const t = db.transaction(store, mode)
         const s = t.objectStore(store)
-        const out = fn(s)
+        let out
+        try {
+          out = fn(s)
+        } catch (err) {
+          // 回调同步抛错时事务里已排队的请求会被提交，必须显式 abort 才能整体回滚
+          try {
+            t.abort()
+          } catch {}
+          reject(err)
+          return
+        }
         t.oncomplete = () => resolve(out && out.result !== undefined ? out.result : out)
         t.onerror = () => reject(t.error)
         t.onabort = () => reject(t.error)
