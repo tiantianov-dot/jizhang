@@ -130,20 +130,72 @@ const DAYS = new Date(Y, Number(M), 0).getDate()
   check('空月柱图占位', (await page.locator('.bar-wrap .placeholder').count()) === 1)
   check('空月隐藏分类预算卡', (await page.locator('.brow').count()) === 0)
 
-  // ---- 回到当前月：归档分类仍出现在占比里 ----
+  // ---- 回到当前月：归档自定义分类后仍出现在占比里 ----
   await page.locator('.mbar .nav').nth(1).click() // ›
   await page.waitForTimeout(300)
+
+  // 内置分类受保护不可删，改用一笔自定义分类验证「归档后统计仍按原分类显示」
+  const archiveCatId = 'stats-archived-cat'
+  await page.evaluate(
+    ([catId, dateStr]) =>
+      new Promise((resolve, reject) => {
+        const req = indexedDB.open('jizhang', 1)
+        req.onerror = () => reject(req.error)
+        req.onsuccess = () => {
+          const db = req.result
+          const tx = db.transaction(['categories', 'records'], 'readwrite')
+          tx.objectStore('categories').put({
+            id: catId,
+            name: '咖啡统计',
+            emoji: '☕',
+            color: '#111111',
+            type: 'expense',
+            monthlyBudget: 0,
+            order: 999,
+            archived: false,
+            lastUsedAt: 0,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          })
+          tx.objectStore('records').put({
+            id: 'stats-archived-rec',
+            amount: 100,
+            type: 'expense',
+            categoryId: catId,
+            note: '归档统计实证',
+            date: dateStr,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            deleted: false,
+            deletedAt: null,
+            private: false,
+            owner: 'me',
+          })
+          tx.oncomplete = () => {
+            db.close()
+            resolve('ok')
+          }
+          tx.onerror = () => reject(tx.error)
+        }
+      }),
+    [archiveCatId, `${Y}-${M}-15`],
+  )
+  await page.reload()
+  await page.waitForSelector('.mbar')
+  const legendBefore = await page.locator('.legend').textContent()
+  check('自定义分类「咖啡统计」进入占比图例', legendBefore.includes('咖啡统计'), legendBefore.trim())
+
   await page.goto(BASE + '/#/categories')
-  await page.locator('.row', { hasText: '餐饮' }).locator('.act').click()
+  await page.locator('.row', { hasText: '咖啡统计' }).locator('.act').click()
   await page.click('.form .del')
   await page.click('.form .del')
   await page.waitForSelector('.toast')
-  check('餐饮有引用 → 归档', (await page.textContent('.toast')).includes('已归档'))
+  check('咖啡统计有引用 → 归档', (await page.textContent('.toast')).includes('已归档'))
 
   await page.goto(BASE + '/#/stats')
   await page.waitForSelector('.mbar')
   const legendAfter = await page.locator('.legend').textContent()
-  check('归档分类仍出现在占比图例', legendAfter.includes('餐饮'), legendAfter.trim())
+  check('归档分类仍出现在占比图例', legendAfter.includes('咖啡统计'), legendAfter.trim())
 
   await browser.close()
   console.log(results.join('\n'))

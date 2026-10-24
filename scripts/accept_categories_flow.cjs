@@ -27,7 +27,7 @@ const rowOf = (page, text) => page.locator('.row', { hasText: text })
   check('新增保存反馈「已新增」', (await page.textContent('.toast')).includes('已新增'))
   await rowOf(page, '咖啡').waitFor()
   check('支出分类列表出现「咖啡」', (await rowOf(page, '咖啡').count()) === 1)
-  check('引用数显示 0 笔', (await rowOf(page, '咖啡').textContent()).includes('0 笔'))
+  check('引用数显示有效 0 / 回收站 0', (await rowOf(page, '咖啡').textContent()).includes('有效 0') && (await rowOf(page, '咖啡').textContent()).includes('回收站 0'))
 
   // ---- 2. 用新分类真实入账 ¥5 ----
   await page.goto(BASE + '/#/list')

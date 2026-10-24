@@ -1,245 +1,364 @@
 /**
- * E2E 验收：数据备份防呆（lastBackupAt + 设置页提醒三态 + 导出文件名）
+ * E2E 验收：P1-1 / P1-2 备份三态、提醒周期、导出确认、计数披露与恶意导入
  * 前置：dev server 跑在 5199；NODE_PATH 指向 playwright-core 所在 node_modules
- * 运行：NODE_PATH=~/.workbuddy/binaries/node/workspace/node_modules node scripts/accept_backup_flow.cjs
  */
-const { chromium } = require('playwright-core')
+const fs = require('fs')
+const h = require('./e2e-harness.cjs')
 
-const EXE = 'C:/Users/lenovo/AppData/Local/ms-playwright/chromium-1234/chrome-win64/chrome.exe'
-const BASE = 'http://localhost:5199'
+const run = h.createRun('备份三态与 P1-2 E2E')
 
-let pass = 0
-let fail = 0
-function check(name, ok, detail = '') {
-  const mark = ok ? 'PASS' : 'FAIL'
-  if (ok) pass++
-  else fail++
-  console.log(`[${mark}] ${name}${!ok && detail ? ` — ${detail}` : ''}`)
+async function saveRecord(page, { amount, note, privateFlag = false }) {
+  await h.openAdd(page, { amount: String(amount), note })
+  if (privateFlag) await page.click('.lock')
+  await page.click('.pad .ok')
+  await h.waitToast(page, '已记')
+  const records = await h.readStore(page, 'records')
+  return records.find((rec) => rec.note === note && !rec.deleted)
 }
 
-/** 直取 Pinia settings store 并调用其真实 load()（模拟外部写入后刷新） */
-async function reloadSettingsStore(page) {
-  return page.evaluate(async () => {
-    const app = document.querySelector('#app').__vue_app__
-    const pinia =
-      app.config.globalProperties.$pinia ||
-      Object.getOwnPropertySymbols(app._context.provides)
-        .map((s) => app._context.provides[s])
-        .find((v) => v && v._s && typeof v._s.get === 'function')
-    const store = pinia._s.get('settings')
-    await store.load()
-    return store.lastBackupAt
-  })
+async function deleteRecord(page, id) {
+  await page.goto(`${h.BASE}/#/record/${id}`)
+  await page.waitForSelector('.note')
+  const lockTitle = await page.getAttribute('.lock', 'title')
+  await page.click('.del')
+  await page.click('.del')
+  await page.waitForURL(/#\/list/, { timeout: 8000 })
+  return lockTitle
 }
 
-/** 把 settings 表里的 lastBackupAt 直接改写（绕过 UI，制造「N 天前备份过」的库状态） */
-async function setLastBackupAtInDB(page, iso) {
-  return page.evaluate(
-    (v) =>
-      new Promise((resolve) => {
-        const req = indexedDB.open('jizhang', 1)
-        req.onsuccess = () => {
-          const db = req.result
-          const tx = db.transaction('settings', 'readwrite')
-          tx.objectStore('settings').put({ key: 'lastBackupAt', value: v })
-          tx.oncomplete = () => resolve('ok')
-        }
-      }),
-    iso,
-  )
+async function gotoSettings(page) {
+  await page.goto(h.BASE + '/#/settings')
+  await page.waitForSelector('[data-testid="backup-counts"]', { timeout: 10000 })
 }
 
-/** 通用：直接写/读 settings 表某一键（制造本地状态，绕过 UI） */
-async function setSettingInDB(page, key, value) {
-  return page.evaluate(
-    ([k, v]) =>
-      new Promise((resolve) => {
-        const req = indexedDB.open('jizhang', 1)
-        req.onsuccess = () => {
-          const tx = req.result.transaction('settings', 'readwrite')
-          tx.objectStore('settings').put({ key: k, value: v, updatedAt: Date.now() })
-          tx.oncomplete = () => resolve('ok')
-        }
-      }),
-    [key, value],
-  )
-}
-async function getSettingInDB(page, key) {
-  return page.evaluate(
-    (k) =>
-      new Promise((resolve) => {
-        const req = indexedDB.open('jizhang', 1)
-        req.onsuccess = () => {
-          const g = req.result.transaction('settings').objectStore('settings').get(k)
-          g.onsuccess = () => resolve(g.result ? g.result.value : null)
-        }
-      }),
-    key,
-  )
+async function statusText(page) {
+  return page.textContent('[data-testid="backup-status"]')
 }
 
-const daysAgoIso = (n) => {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString()
+async function countsText(page) {
+  return page.textContent('[data-testid="backup-counts"]')
+}
+
+async function exportPayload(page) {
+  const downloadPromise = page.waitForEvent('download', { timeout: 10000 })
+  await page.click('[data-testid="backup-export"]')
+  const download = await downloadPromise
+  const path = await download.path()
+  return {
+    name: download.suggestedFilename(),
+    payload: JSON.parse(fs.readFileSync(path, 'utf8')),
+  }
 }
 
 ;(async () => {
-  const browser = await chromium.launch({ executablePath: EXE })
-  const context = await browser.newContext()
-  // headless Chromium 里 navigator.canShare 会返回 true 但 share() 必然 reject——
-  // 强制走「降级下载」路径（与桌面 Chrome 一致），才能捕获 download 事件断言文件名。
-  // iOS 真机分享路径无法在 headless 中模拟，属预期测试边界。
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, 'canShare', { value: () => false, configurable: true })
-  })
+  const { browser, context } = await h.launch({ canShare: false })
   const page = await context.newPage()
-  page.setDefaultTimeout(8000)
+  run.attach(page)
 
-  /* ---------- 1. 全新库：无账目 → 不显示任何提醒 ---------- */
-  await page.goto(BASE + '/')
-  await page.waitForSelector('.cats .cat')
-  await page.goto(BASE + '/#/settings')
-  await page.waitForSelector('.card')
-  check('空库不显示备份提醒', (await page.locator('.bstat').count()) === 0)
-
-  /* ---------- 2. 有账目 + 从未备份 → 红点「还没备份过」 ---------- */
-  await page.goto(BASE + '/')
-  await page.waitForSelector('.cats .cat')
-  await page.click('.cats .cat') // 1. 选分类
-  await page.locator('.pad .key').first().click() // 2. 金额 1
-  const downloadPromise = page.waitForEvent('download', { timeout: 8000 }).catch(() => null)
-  await page.click('.pad .ok') // 3. 入账
-  await downloadPromise // 吃掉这次误触发的下载（不会发生，纯防御）
-
-  await page.goto(BASE + '/#/settings')
-  await page.waitForSelector('.bstat')
-  const stat1 = await page.textContent('.bstat')
-  const dot1 = await page.locator('.dot').getAttribute('class')
-  check('有账目从未备份 → 提醒出现', stat1.includes('还没备份过'), stat1)
-  check('红点态（never）', dot1 && dot1.includes('never'), dot1)
-
-  /* ---------- 3. 导出 → 文件名日期格式 + lastBackupAt 记录 + 「今天」 ---------- */
-  const dlPromise = page.waitForEvent('download', { timeout: 8000 })
-  await page.click('button:has-text("导出 JSON")')
-  const dl = await dlPromise
-  const stampRe = /^jizhang-backup-\d{8}-\d{4}\.json$/
-  check('导出文件名 YYYYMMDD-HHmm', stampRe.test(dl.suggestedFilename()), dl.suggestedFilename())
-
-  await page.waitForTimeout(400)
-  const stat2 = await page.textContent('.bstat')
-  const dot2 = await page.locator('.dot').getAttribute('class')
-  check('导出后显示「上次备份：今天」', stat2.includes('今天'), stat2)
-  check('绿点态（ok）', dot2 && dot2.includes('ok'), dot2)
-
-  // lastBackupAt 真实落库（settings 表）
-  const inDb = await page.evaluate(
-    () =>
-      new Promise((resolve) => {
-        const req = indexedDB.open('jizhang', 1)
-        req.onsuccess = () => {
-          const g = req.result.transaction('settings').objectStore('settings').get('lastBackupAt')
-          g.onsuccess = () => resolve(g.result)
-        }
-      }),
+  /* ---------- 1. 首次空库：设置页显示「尚未备份」，记一笔页无提醒 ---------- */
+  await gotoSettings(page)
+  run.check(
+    '空库设置页显示「尚未备份」',
+    (await statusText(page)).includes('尚未备份') &&
+      (await page.textContent('[data-testid="backup-last-at"]')).includes('尚未备份'),
+    await statusText(page),
   )
-  check('lastBackupAt 已写入 IndexedDB', inDb && typeof inDb.value === 'string', JSON.stringify(inDb))
+  run.check(
+    '空库计数全 0',
+    (await countsText(page)).replace(/\s+/g, ' ').includes('有效 0 · 回收站 0 · 本机标记 0 · 备份总计 0'),
+    await countsText(page),
+  )
+  const settingsCopy = await page.textContent('.page')
+  run.check(
+    '设置页文案不暗示同步/加密：明确「不代表加密或密码保护」且无「不同步」',
+    settingsCopy.includes('不代表加密或密码保护') && !settingsCopy.includes('不同步'),
+  )
+  await h.openAdd(page)
+  run.check('空账本记一笔页不显示备份提醒', (await page.locator('[data-testid="backup-reminder"]').count()) === 0)
+  const addLockTitle = await page.getAttribute('.lock', 'title')
+  run.check(
+    '记一笔页本机标记文案不暗示同步/加密',
+    addLockTitle.includes('本机标记') &&
+      addLockTitle.includes('不代表加密或密码保护') &&
+      !addLockTitle.includes('同步'),
+    addLockTitle,
+  )
 
-  /* ---------- 4. 手工把备份时间改成 10 天前 → 黄色「已 10 天未备份」 ---------- */
-  await setLastBackupAtInDB(page, daysAgoIso(10))
-  await reloadSettingsStore(page)
-  await page.waitForTimeout(200)
-  const stat3 = await page.textContent('.bstat')
-  const dot3 = await page.locator('.dot').getAttribute('class')
-  check('10 天前 → 黄色「已 10 天未备份」', stat3.includes('已 10 天未备份'), stat3)
-  check('黄点态（stale）', dot3 && dot3.includes('stale'), dot3)
+  /* ---------- 2. 造 4 笔：3 有效（含 1 私密）+ 1 回收站 ---------- */
+  await saveRecord(page, { amount: 12.34, note: 'ACTIVE-A' })
+  await saveRecord(page, { amount: 5, note: 'ACTIVE-B' })
+  await saveRecord(page, { amount: 7.5, note: 'PRIVATE-P', privateFlag: true })
+  const deletedRecord = await saveRecord(page, { amount: 3, note: 'DELETED-D' })
+  const editLockTitle = await deleteRecord(page, deletedRecord.id)
+  run.check(
+    '编辑页本机标记文案不暗示同步/加密',
+    editLockTitle.includes('本机标记') &&
+      editLockTitle.includes('不代表加密或密码保护') &&
+      !editLockTitle.includes('同步'),
+    editLockTitle,
+  )
 
-  /* ---------- 5. 3 天前 → 正常灰字 ---------- */
-  await setLastBackupAtInDB(page, daysAgoIso(3))
-  await reloadSettingsStore(page)
-  await page.waitForTimeout(200)
-  const stat4 = await page.textContent('.bstat')
-  check('3 天前 → 「上次备份：3 天前」', stat4.includes('3 天前'), stat4)
+  await gotoSettings(page)
+  const dbRecords = await h.readStore(page, 'records')
+  const expected = {
+    active: dbRecords.filter((rec) => !rec.deleted).length,
+    deleted: dbRecords.filter((rec) => rec.deleted).length,
+    private: dbRecords.filter((rec) => rec.private).length,
+    total: dbRecords.length,
+  }
+  const shownCounts = (await countsText(page)).replace(/\s+/g, ' ')
+  run.check(
+    '计数披露与库内数组逐项一致（有效3/回收站1/本机标记1/总计4）',
+    expected.active === 3 &&
+      expected.deleted === 1 &&
+      expected.private === 1 &&
+      expected.total === 4 &&
+      shownCounts.includes(`有效 ${expected.active}`) &&
+      shownCounts.includes(`回收站 ${expected.deleted}`) &&
+      shownCounts.includes(`本机标记 ${expected.private}`) &&
+      shownCounts.includes(`备份总计 ${expected.total}`),
+    `${shownCounts} / db=${JSON.stringify(expected)}`,
+  )
+  run.check(
+    '状态仍为「尚未备份」',
+    (await page.locator('[data-testid="backup-status"]').getAttribute('data-status')) === 'never',
+  )
 
-  /* ---------- 6. 导入语义：不回滚 lastBackupAt + 白名单按键过滤（含正向预言） ---------- */
-  // 导出前先写一个可识别的白名单键，保证备份文件里一定带上它
-  await setSettingInDB(page, 'ownerName', 'QA-EXPORT-NAME')
-  // 再造两行「库里确实存在、但绝不该外发」的 settings：V4 遗留的 uiGlassDim（§8.1.1 已删）
-  // 与一个完全未知的键。缺了这两行，下面的 dim 负断言与「⊆ 白名单」会因为库里恰好没有而空转。
-  await setSettingInDB(page, 'uiGlassDim', 0.3)
-  await setSettingInDB(page, 'qaStraySetting', 'should-not-export')
-  const dl2Promise = page.waitForEvent('download', { timeout: 8000 })
-  await page.click('button:has-text("导出 JSON")')
-  const dl2 = await dl2Promise
-  const payloadText = (await dl2.path()) ? require('fs').readFileSync(await dl2.path(), 'utf8') : null
-  check('拿到导出 payload（供导入）', !!payloadText)
-
-  // 导出侧白名单实证（fail-closed 的前半边）
-  const payload = JSON.parse(payloadText)
-  const exportedKeys = (payload.settings || []).map((s) => s.key)
-  const WHITELIST = ['monthlyBudget', 'ownerName', 'uiGlassIntensity', 'uiGlassFill']
-  const dimRow = await getSettingInDB(page, 'uiGlassDim')
-  const strayRow = await getSettingInDB(page, 'qaStraySetting')
-  check('★负例前提：库里确有 V4 遗留 uiGlassDim 与未知 qaStraySetting 两行（缺了它们下面两条断言就是空转）',
-    dimRow === 0.3 && strayRow === 'should-not-export', JSON.stringify({ dimRow, strayRow }))
-  check('导出不含 lastBackupAt（设备本地备份状态不外发）', !exportedKeys.includes('lastBackupAt'), JSON.stringify(exportedKeys))
-  check('导出不含 syncConfig（将来放凭据也不会被打包外发）', !exportedKeys.includes('syncConfig'), JSON.stringify(exportedKeys))
-  check('导出 settings ⊆ 白名单四键', exportedKeys.every((k) => WHITELIST.includes(k)), JSON.stringify(exportedKeys))
-  check('★导出不含库里的 V4 遗留 uiGlassDim 行（旧备份行也不得被导出）', !exportedKeys.includes('uiGlassDim'), JSON.stringify(exportedKeys))
-  check('★导出不含库里的未知键 qaStraySetting（白名单写成了包含式才抓得住多余键）', !exportedKeys.includes('qaStraySetting'), JSON.stringify(exportedKeys))
-
-  await setLastBackupAtInDB(page, daysAgoIso(20))
-  // 关键：本地把 ownerName 改成另一个值。若导入是「什么都不写」的空操作，
-  // 下面的正向断言就会红 —— 它给「不回滚 lastBackupAt」提供判别力，防弱预言。
-  await setSettingInDB(page, 'ownerName', 'QA-LOCAL-NEWER')
-  // 再往文件里塞两个白名单外键，验证导入是**按键过滤**而不是整包丢弃
-  payload.settings = [
-    ...(payload.settings || []),
-    { key: 'evilImportKey', value: 'should-be-dropped', updatedAt: Date.now() },
-    { key: 'syncConfig', value: { token: 'LEAK' }, updatedAt: Date.now() },
+  /* ---------- 3. download 未确认不写时间；确认后才写；真实 JSON 内容一致 ---------- */
+  const exported = await exportPayload(page)
+  run.check('导出文件名 YYYYMMDD-HHmm.json', /^jizhang-backup-\d{8}-\d{4}\.json$/.test(exported.name), exported.name)
+  run.check('备份版本为 v2', exported.payload.version === 2, String(exported.payload.version))
+  const payloadRecords = exported.payload.records
+  run.check(
+    '真实 JSON 与计数逐项一致',
+    payloadRecords.filter((rec) => !rec.deleted).length === expected.active &&
+      payloadRecords.filter((rec) => rec.deleted).length === expected.deleted &&
+      payloadRecords.filter((rec) => rec.private).length === expected.private &&
+      payloadRecords.length === expected.total,
+  )
+  run.check(
+    '软删与 private 记录确实写入备份',
+    payloadRecords.some((rec) => rec.id === deletedRecord.id && rec.deleted === true) &&
+      payloadRecords.some((rec) => rec.note === 'PRIVATE-P' && rec.private === true),
+  )
+  const exportedKeys = (exported.payload.settings || []).map((row) => row.key)
+  const whitelist = [
+    'monthlyBudget',
+    'ownerName',
+    'uiGlassIntensity',
+    'uiGlassFill',
+    'backupReminderDays',
+    'backupReminderEnabled',
   ]
-  await page.setInputFiles('input[type=file]', {
-    name: 'test.json',
-    mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(payload)),
+  run.check(
+    '导出 settings ⊆ 白名单，且不含 lastBackupAt / seedVersion / builtinIdentityVersion',
+    exportedKeys.every((key) => whitelist.includes(key)) &&
+      !exportedKeys.includes('lastBackupAt') &&
+      !exportedKeys.includes('seedVersion') &&
+      !exportedKeys.includes('builtinIdentityVersion'),
+    JSON.stringify(exportedKeys),
+  )
+  run.check(
+    'download 未确认前 lastBackupAt 仍为空',
+    (await h.getSetting(page, 'lastBackupAt')) === null,
+    String(await h.getSetting(page, 'lastBackupAt')),
+  )
+  run.check(
+    '出现「我已保存，更新备份时间」确认入口',
+    (await page.locator('[data-testid="backup-confirm-saved"]').count()) === 1,
+  )
+  await page.click('[data-testid="backup-confirm-saved"]')
+  await page.waitForFunction(() => document.querySelector('.msg')?.textContent.includes('备份时间已更新'))
+  const savedAt = await h.getSetting(page, 'lastBackupAt')
+  run.check('确认后才写入 lastBackupAt', typeof savedAt === 'string' && savedAt.length > 0, String(savedAt))
+  run.check(
+    '确认后状态变 ok（今天）',
+    (await page.locator('[data-testid="backup-status"]').getAttribute('data-status')) === 'ok' &&
+      (await statusText(page)).includes('今天'),
+    await statusText(page),
+  )
+
+  await page.reload()
+  await page.waitForSelector('[data-testid="backup-counts"]', { timeout: 10000 })
+  run.check(
+    '刷新后备份状态保持 ok 且上次导出时间可见',
+    (await page.locator('[data-testid="backup-status"]').getAttribute('data-status')) === 'ok' &&
+      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test((await page.textContent('[data-testid="backup-last-at"]')).replace('上次导出：', '').trim()),
+    await page.textContent('[data-testid="backup-last-at"]'),
+  )
+
+  /* ---------- 4. 周期 3/7/14/30 边界、关闭提醒与刷新持久化 ---------- */
+  await h.setSetting(page, 'lastBackupAt', h.daysAgoIso(10))
+  await h.reloadSettingsStore(page)
+  await page.waitForTimeout(250)
+  run.check(
+    '10 天前 + 周期 7 → stale',
+    (await page.locator('[data-testid="backup-status"]').getAttribute('data-status')) === 'stale' &&
+      (await statusText(page)).includes('已 10 天未备份（周期 7 天）'),
+    await statusText(page),
+  )
+  await page.selectOption('[data-testid="backup-days"]', '14')
+  await page.waitForTimeout(250)
+  run.check(
+    '周期改 14 → 立即重算 ok',
+    (await page.locator('[data-testid="backup-status"]').getAttribute('data-status')) === 'ok' &&
+      (await statusText(page)).includes('上次备份：10 天前'),
+    await statusText(page),
+  )
+  run.check('周期 14 已落库', (await h.getSetting(page, 'backupReminderDays')) === 14)
+  await page.selectOption('[data-testid="backup-days"]', '3')
+  await page.waitForTimeout(250)
+  run.check('周期 3 → stale', (await page.locator('[data-testid="backup-status"]').getAttribute('data-status')) === 'stale')
+  await page.selectOption('[data-testid="backup-days"]', '30')
+  await page.waitForTimeout(250)
+  run.check('周期 30 → ok', (await page.locator('[data-testid="backup-status"]').getAttribute('data-status')) === 'ok')
+  await page.selectOption('[data-testid="backup-days"]', '7')
+  await page.waitForTimeout(250)
+  run.check('周期 7 → stale', (await page.locator('[data-testid="backup-status"]').getAttribute('data-status')) === 'stale')
+
+  await page.click('[data-testid="backup-reminder-toggle"]')
+  await page.waitForTimeout(200)
+  run.check(
+    '关闭提醒后状态行隐藏，但上次导出时间仍显示',
+    (await page.locator('[data-testid="backup-status"]').count()) === 0 &&
+      (await page.textContent('[data-testid="backup-last-at"]')).includes('上次导出：'),
+  )
+  run.check('关闭提醒不删账目/分类', (await h.readStore(page, 'records')).length === 4 && (await h.readStore(page, 'categories')).length === 16)
+  run.check('关闭提醒落库 backupReminderEnabled=false', (await h.getSetting(page, 'backupReminderEnabled')) === false)
+  await page.reload()
+  await page.waitForSelector('[data-testid="backup-counts"]', { timeout: 10000 })
+  run.check(
+    '刷新后提醒仍关闭、周期仍 7',
+    (await page.locator('[data-testid="backup-status"]').count()) === 0 &&
+      (await page.inputValue('[data-testid="backup-days"]')) === '7',
+  )
+  await page.click('[data-testid="backup-reminder-toggle"]')
+  await page.waitForTimeout(200)
+  run.check(
+    '重新开启提醒 → 状态行恢复',
+    (await page.locator('[data-testid="backup-status"]').count()) === 1 &&
+      (await h.getSetting(page, 'backupReminderEnabled')) === true,
+  )
+
+  /* ---------- 5. 分享取消 / 失败 / 成功的时间语义 ---------- */
+  const beforeShare = await h.getSetting(page, 'lastBackupAt')
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'canShare', { value: () => true, configurable: true })
+    Object.defineProperty(navigator, 'share', {
+      value: async () => {
+        throw new DOMException('cancelled', 'AbortError')
+      },
+      configurable: true,
+    })
   })
-  await page.waitForTimeout(600)
-  const afterImport = await reloadSettingsStore(page)
-  check('导入成功提示', (await page.textContent('.msg')).includes('导入完成'))
-
-  // ★正向预言：白名单键确实被文件值覆盖（证明导入干了活）
-  const ownerAfter = await getSettingInDB(page, 'ownerName')
-  check(
-    '★正向：白名单键 ownerName 被备份文件里的值覆盖（导入不是空操作）',
-    ownerAfter === 'QA-EXPORT-NAME',
-    `实际=${JSON.stringify(ownerAfter)}，期望=QA-EXPORT-NAME`,
+  await page.click('[data-testid="backup-export"]')
+  await page.waitForFunction(() => document.querySelector('.msg')?.textContent.includes('已取消分享'))
+  run.check(
+    '分享取消 → 明确提示且不写时间',
+    (await h.getSetting(page, 'lastBackupAt')) === beforeShare,
+    await page.textContent('.msg'),
   )
-  // ★按键过滤（fail-closed 的后半边）
-  const evilAfter = await getSettingInDB(page, 'evilImportKey')
-  const syncAfter = await getSettingInDB(page, 'syncConfig')
-  check('★fail-closed：未知键 evilImportKey 没被导入落库', evilAfter === null, JSON.stringify(evilAfter))
-  check('★fail-closed：syncConfig 没被导入落库', syncAfter === null, JSON.stringify(syncAfter))
-
-  // 语义边界（U4 起，口径已变更）：settings 走键白名单，`lastBackupAt` **不在白名单内**，
-  // 因此它既不进导出也不进导入 —— 导入后必须保持「导入前的本地值」（本脚本设为 20 天前）。
-  // 旧语义「导入后 lastBackupAt 变成备份文件里的快照（3 天前）」已作废：
-  // 那等于让一次恢复动作把设备的备份提醒回滚，同步语义下还会互相压制提醒。
-  const snapshotDate = daysAgoIso(3).slice(0, 10)
-  const localDate = daysAgoIso(20).slice(0, 10)
-  const todayDate = new Date().toISOString().slice(0, 10)
-  check(
-    '导入不回滚 lastBackupAt（白名单外键：保持导入前的本地 20 天前，既不快照也不现在）',
-    !!afterImport &&
-      afterImport.slice(0, 10) === localDate &&
-      afterImport.slice(0, 10) !== snapshotDate &&
-      afterImport.slice(0, 10) !== todayDate,
-    `afterImport=${afterImport}，期望本地=${localDate}，快照=${snapshotDate}，今天=${todayDate}`,
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'share', {
+      value: async () => {
+        throw new Error('share failed')
+      },
+      configurable: true,
+    })
+  })
+  await page.click('[data-testid="backup-export"]')
+  await page.waitForFunction(() => document.querySelector('.msg')?.textContent.includes('分享失败'))
+  run.check('分享失败 → 不写时间', (await h.getSetting(page, 'lastBackupAt')) === beforeShare)
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'share', { value: async () => {}, configurable: true })
+  })
+  await page.click('[data-testid="backup-export"]')
+  await page.waitForFunction(() => document.querySelector('.msg')?.textContent.includes('已导出备份'))
+  const afterShare = await h.getSetting(page, 'lastBackupAt')
+  run.check(
+    '分享 resolved → 写时间并提示确认落盘',
+    typeof afterShare === 'string' && afterShare !== beforeShare,
+    String(afterShare),
   )
 
-  await browser.close()
-  console.log(`\n结果: ${pass} PASS, ${fail} FAIL`)
-  process.exit(fail ? 1 : 0)
-})().catch((e) => {
-  console.error('FATAL', e)
+  /* ---------- 6. 恶意导入：lastBackupAt/迁移标记不被改，新周期键可恢复 ---------- */
+  await h.setSetting(page, 'lastBackupAt', h.daysAgoIso(20))
+  const seedBefore = await h.getSetting(page, 'seedVersion')
+  const identityBefore = await h.getSetting(page, 'builtinIdentityVersion')
+  const beforeRecords = (await h.readStore(page, 'records')).length
+  const beforeCategories = (await h.readStore(page, 'categories')).length
+  const malicious = JSON.parse(JSON.stringify(exported.payload))
+  const localOnly = ['lastBackupAt', 'seedVersion', 'builtinIdentityVersion', 'syncConfig', 'evilImportKey', 'backupReminderDays', 'backupReminderEnabled']
+  malicious.settings = (malicious.settings || []).filter((row) => !localOnly.includes(row.key))
+  const future = Date.now() + 600000
+  malicious.settings.push(
+    { key: 'lastBackupAt', value: new Date().toISOString(), updatedAt: future },
+    { key: 'seedVersion', value: 99, updatedAt: future },
+    { key: 'builtinIdentityVersion', value: 99, updatedAt: future },
+    { key: 'syncConfig', value: { token: 'LEAK' }, updatedAt: future },
+    { key: 'evilImportKey', value: 'nope', updatedAt: future },
+    { key: 'backupReminderDays', value: 14, updatedAt: future },
+    { key: 'backupReminderEnabled', value: false, updatedAt: future },
+  )
+  await page.setInputFiles('input[type=file]', {
+    name: 'malicious.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(malicious)),
+  })
+  await page.waitForSelector('[data-testid="import-preview"]', { timeout: 8000 })
+  await page.click('button:has-text("确认导入")')
+  await page.waitForFunction(() => document.querySelector('.msg')?.textContent.includes('导入完成'), undefined, { timeout: 10000 })
+  const importedLast = await h.getSetting(page, 'lastBackupAt')
+  run.check(
+    '恶意导入不改本地 lastBackupAt（仍为 20 天前）',
+    typeof importedLast === 'string' && importedLast.slice(0, 10) === h.daysAgoIso(20).slice(0, 10),
+    String(importedLast),
+  )
+  run.check(
+    '恶意导入不改 seedVersion / builtinIdentityVersion',
+    (await h.getSetting(page, 'seedVersion')) === seedBefore &&
+      (await h.getSetting(page, 'builtinIdentityVersion')) === identityBefore,
+    `${seedBefore}/${identityBefore}`,
+  )
+  run.check(
+    '白名单外键 syncConfig / evilImportKey 未落库',
+    (await h.getSetting(page, 'syncConfig')) === null &&
+      (await h.getSetting(page, 'evilImportKey')) === null,
+  )
+  run.check(
+    '新周期键可从备份恢复（14 天 / 关闭提醒）',
+    (await h.getSetting(page, 'backupReminderDays')) === 14 &&
+      (await h.getSetting(page, 'backupReminderEnabled')) === false,
+  )
+  run.check(
+    '恶意导入不增删账目与分类',
+    (await h.readStore(page, 'records')).length === beforeRecords &&
+      (await h.readStore(page, 'categories')).length === beforeCategories,
+  )
+
+  /* ---------- 7. 记一笔页轻提示：开启+过期才出现，ok/关闭时隐藏 ---------- */
+  await h.setSetting(page, 'backupReminderEnabled', false)
+  await h.openAdd(page)
+  run.check('提醒关闭时记一笔页无轻提示', (await page.locator('[data-testid="backup-reminder"]').count()) === 0)
+  await h.setSetting(page, 'backupReminderEnabled', true)
+  await h.setSetting(page, 'lastBackupAt', h.daysAgoIso(20))
+  await h.openAdd(page)
+  await page.waitForSelector('[data-testid="backup-reminder"]', { timeout: 6000 })
+  run.check(
+    '过期 + 开启 → 记一笔页出现非阻塞提醒',
+    (await page.textContent('[data-testid="backup-reminder"]')).includes('20 天未备份'),
+    await page.textContent('[data-testid="backup-reminder"]'),
+  )
+  await page.click('[data-testid="backup-reminder"]')
+  await page.waitForURL(/#\/settings/)
+  run.check('轻提示跳转设置页', page.url().includes('#/settings'))
+  await h.setSetting(page, 'lastBackupAt', new Date().toISOString())
+  await h.openAdd(page)
+  await page.waitForTimeout(400)
+  run.check('备份为 ok 时记一笔页无轻提示', (await page.locator('[data-testid="backup-reminder"]').count()) === 0)
+
+  await run.finish(browser)
+})().catch((error) => {
+  console.error('FATAL', error)
   process.exit(1)
 })
