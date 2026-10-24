@@ -205,10 +205,12 @@ test('settings 白名单值校验；本机键与未知键允许存在但由 plan
         setting({ key: 'monthlyBudget', value: -1 }),
         { key: 'ownerName', value: 123, updatedAt: 1 },
         { key: 'uiGlassIntensity', value: 'high', updatedAt: 1 },
+        { key: 'backupReminderDays', value: 5, updatedAt: 1 },
+        { key: 'backupReminderEnabled', value: 'yes', updatedAt: 1 },
       ],
     }),
   )
-  assert.equal(bad.errors.filter((item) => item.code === 'INVALID_SETTING').length, 3)
+  assert.equal(bad.errors.filter((item) => item.code === 'INVALID_SETTING').length, 5)
 
   const ok = normalizeBackup(
     payload({
@@ -216,11 +218,13 @@ test('settings 白名单值校验；本机键与未知键允许存在但由 plan
         setting({ key: 'lastBackupAt', value: '2026-10-24T00:00:00.000Z' }),
         setting({ key: 'unknownKey', value: { x: 1 } }),
         setting({ key: 'uiGlassFill', value: 0.03 }),
+        setting({ key: 'backupReminderDays', value: 30 }),
+        setting({ key: 'backupReminderEnabled', value: false }),
       ],
     }),
   )
   assert.deepEqual(ok.errors, [])
-  assert.equal(ok.settings.length, 3)
+  assert.equal(ok.settings.length, 5)
 })
 
 test('normalize 确定性且不修改入参', () => {

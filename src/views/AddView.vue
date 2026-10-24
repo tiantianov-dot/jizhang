@@ -15,6 +15,7 @@ import {
   WRITE_MESSAGES,
 } from '@/services/writeOutcome'
 import AmountPad from '@/components/AmountPad.vue'
+import BackupReminder from '@/components/BackupReminder.vue'
 import CategoryGrid from '@/components/CategoryGrid.vue'
 import GlassPanel from '@/components/GlassPanel.vue'
 import ImmersiveLayer from '@/components/ImmersiveLayer.vue'
@@ -297,6 +298,8 @@ async function undo() {
       <div class="amount" :class="type"><span class="cur">¥</span>{{ display }}</div>
       <div class="sub">{{ subline }}</div>
     </GlassPanel>
+
+    <BackupReminder />
 
     <!-- 分类 chip：最近使用自动排前 -->
     <CategoryGrid v-model="activeCat" :cats="cats" />

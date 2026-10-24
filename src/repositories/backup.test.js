@@ -90,13 +90,20 @@ test('导出为 v2：含软删/private，settings 白名单排除本机标记', 
   await putOne('records', record({ id: 'private', private: true, updatedAt: 2 }))
   await putOne('settings', { key: 'lastBackupAt', value: '2026-10-24', updatedAt: 1 })
   await putOne('settings', { key: 'monthlyBudget', value: 500, updatedAt: 1 })
+  await putOne('settings', { key: 'backupReminderDays', value: 14, updatedAt: 1 })
+  await putOne('settings', { key: 'backupReminderEnabled', value: false, updatedAt: 1 })
 
   const data = await exportAll()
   assert.equal(data.app, 'jizhang')
   assert.equal(data.version, 2)
   assert.deepEqual(data.records.map((r) => r.id).sort(), ['active', 'deleted', 'private'])
   assert.equal(data.categories.length, 16)
-  assert.deepEqual(data.settings.map((s) => s.key).sort(), ['monthlyBudget', 'ownerName'])
+  assert.deepEqual(data.settings.map((s) => s.key).sort(), [
+    'backupReminderDays',
+    'backupReminderEnabled',
+    'monthlyBudget',
+    'ownerName',
+  ])
 
   const syncData = await exportAll({ purpose: 'sync' })
   assert.deepEqual(syncData.records.map((r) => r.id).sort(), ['active', 'deleted'])
@@ -274,11 +281,15 @@ test('settings 严格 LWW；lastBackupAt/迁移标记即使更新更晚也不导
 
   const newer = await importMerge(
     payload({
-      settings: [{ key: 'monthlyBudget', value: 7000, updatedAt: 3000 }],
+      settings: [
+        { key: 'monthlyBudget', value: 7000, updatedAt: 3000 },
+        { key: 'backupReminderDays', value: 30, updatedAt: FAR_FUTURE() },
+      ],
     }),
   )
-  assert.equal(newer.settings.updated, 1)
+  assert.equal(newer.settings.updated, 2)
   assert.equal((await getOne('settings', 'monthlyBudget')).value, 7000)
+  assert.equal((await getOne('settings', 'backupReminderDays')).value, 30)
   assert.notEqual(await snapshotJSON(), beforeMarkers)
 })
 

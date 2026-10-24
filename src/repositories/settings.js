@@ -8,6 +8,10 @@
  */
 
 import { deleteOne, getOne, putOne } from '@/db'
+import { DEFAULT_REMINDER_DAYS, normalizeReminderDays } from '@/services/backupStatus'
+
+export const BACKUP_REMINDER_DAYS_KEY = 'backupReminderDays'
+export const BACKUP_REMINDER_ENABLED_KEY = 'backupReminderEnabled'
 
 export async function get(key, fallback = null) {
   const row = await getOne('settings', key)
@@ -20,4 +24,27 @@ export async function set(key, value) {
 
 export async function remove(key) {
   await deleteOne('settings', key)
+}
+
+/** 读取时做值校验：只认 3/7/14/30，非法值回退 7 */
+export async function getBackupReminderDays() {
+  return normalizeReminderDays(await get(BACKUP_REMINDER_DAYS_KEY, DEFAULT_REMINDER_DAYS))
+}
+
+export async function setBackupReminderDays(days) {
+  const value = normalizeReminderDays(days)
+  await set(BACKUP_REMINDER_DAYS_KEY, value)
+  return value
+}
+
+/** 读取时做值校验：非布尔值回退 true */
+export async function getBackupReminderEnabled() {
+  const value = await get(BACKUP_REMINDER_ENABLED_KEY, true)
+  return typeof value === 'boolean' ? value : true
+}
+
+export async function setBackupReminderEnabled(enabled) {
+  const value = enabled !== false
+  await set(BACKUP_REMINDER_ENABLED_KEY, value)
+  return value
 }

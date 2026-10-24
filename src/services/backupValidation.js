@@ -17,7 +17,11 @@ export const EXPORTABLE_SETTING_KEYS = Object.freeze([
   'ownerName',
   'uiGlassIntensity',
   'uiGlassFill',
+  'backupReminderDays',
+  'backupReminderEnabled',
 ])
+
+const REMINDER_DAY_VALUES = [3, 7, 14, 30]
 
 const EXPORTABLE_SETTING_KEY_SET = new Set(EXPORTABLE_SETTING_KEYS)
 
@@ -264,11 +268,20 @@ function normalizeSetting(raw, index, errors) {
       errors.push(error('INVALID_SETTING', `${path}.value`, 'ownerName 必须是字符串'))
       ok = false
     }
-    if (
-      (raw.key === 'uiGlassIntensity' || raw.key === 'uiGlassFill') &&
-      !isFiniteNonNegative(raw.value)
-    ) {
-      errors.push(error('INVALID_SETTING', `${path}.value`, `${raw.key} 必须是非负有限数`))
+    if (raw.key === 'uiGlassIntensity' || raw.key === 'uiGlassFill') {
+      if (!isFiniteNonNegative(raw.value)) {
+        errors.push(error('INVALID_SETTING', `${path}.value`, `${raw.key} 必须是非负有限数`))
+        ok = false
+      }
+    }
+    if (raw.key === 'backupReminderDays' && !REMINDER_DAY_VALUES.includes(raw.value)) {
+      errors.push(
+        error('INVALID_SETTING', `${path}.value`, 'backupReminderDays 只能是 3 / 7 / 14 / 30'),
+      )
+      ok = false
+    }
+    if (raw.key === 'backupReminderEnabled' && typeof raw.value !== 'boolean') {
+      errors.push(error('INVALID_SETTING', `${path}.value`, 'backupReminderEnabled 必须是布尔值'))
       ok = false
     }
   }

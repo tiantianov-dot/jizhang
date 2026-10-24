@@ -5,11 +5,13 @@ import { useRecordsStore } from '@/stores/records'
 import { useCategoriesStore } from '@/stores/categories'
 import { useAppearanceStore } from '@/stores/appearance'
 import { useBackgroundStore } from '@/stores/background'
-import { toFen, stampNow, daysSince } from '@/utils/format'
+import { toFen, stampNow } from '@/utils/format'
 import * as backup from '@/repositories/backup'
 import GlassPanel from '@/components/GlassPanel.vue'
 import { coverRequirement } from '@/services/background'
 import { drawStarfield } from '@/services/starfield'
+import { backupAgeDays, getBackupStatus } from '@/services/backupStatus'
+import { classifyShareOutcome, shouldPersistBackup } from '@/services/backupExport'
 
 const settings = useSettingsStore()
 const records = useRecordsStore()
@@ -138,49 +140,121 @@ async function removeBg() {
   msg.value = '已恢复默认星空'
 }
 
-/* ---------- 备份健康度：提醒只在「有数据」时出现，新用户不制造焦虑 ---------- */
+/* ---------- 备份健康度：事实状态与提醒开关分离，空账本也显示 ---------- */
 
-/** 距上次备份的天数（日历日）；null = 从未备份 */
-const backupDays = computed(() => (settings.lastBackupAt ? daysSince(settings.lastBackupAt) : null))
+const backupStatus = computed(() =>
+  getBackupStatus({
+    lastBackupAt: settings.lastBackupAt,
+    days: settings.backupReminderDays,
+    now: Date.now(),
+  }),
+)
 
-/** 提醒状态：never（红，还没备份过）/ stale（黄，超 7 天）/ ok（灰，7 天内） */
-const backupStatus = computed(() => {
-  if (!records.count) return 'none' // 没有账目，没什么可备份的
-  if (backupDays.value === null) return 'never'
-  if (backupDays.value > 7) return 'stale'
-  return 'ok'
-})
+const backupAge = computed(() => backupAgeDays(settings.lastBackupAt))
 
 const backupStatusText = computed(() => {
-  if (backupStatus.value === 'never') return '还没备份过——建议立即导出一份'
-  if (backupStatus.value === 'stale') return `已 ${backupDays.value} 天未备份，建议导出一份`
-  const d = backupDays.value
-  return `上次备份：${d === 0 ? '今天' : `${d} 天前`}`
+  if (backupStatus.value === 'never') return '尚未备份'
+  if (backupStatus.value === 'stale') {
+    return `已 ${backupAge.value} 天未备份（周期 ${settings.backupReminderDays} 天）`
+  }
+  if (backupStatus.value === 'ok') {
+    return backupAge.value === 0 ? '上次备份：今天' : `上次备份：${backupAge.value} 天前`
+  }
+  return '上次备份时间无法识别，建议重新导出'
 })
 
+/** ISO → 本地 YYYY-MM-DD HH:mm；无法解析返回空串 */
+function formatBackupTime(iso) {
+  const t = Date.parse(iso)
+  if (!Number.isFinite(t)) return ''
+  const d = new Date(t)
+  const p = (x) => String(x).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+const lastBackupText = computed(() => {
+  if (!settings.lastBackupAt) return '尚未备份'
+  return formatBackupTime(settings.lastBackupAt) || '时间无法识别'
+})
+
+async function setReminderDays(e) {
+  const days = Number(e.target.value)
+  try {
+    await settings.setBackupReminderDays(days)
+    msg.value = `备份提醒周期已设为 ${settings.backupReminderDays} 天`
+  } catch {
+    msg.value = '提醒周期未保存，请检查浏览器存储后重试'
+  }
+}
+
+async function toggleReminder() {
+  try {
+    await settings.setBackupReminderEnabled(!settings.backupReminderEnabled)
+    msg.value = settings.backupReminderEnabled ? '已开启备份提醒' : '已关闭备份提醒'
+  } catch {
+    msg.value = '提醒开关未保存，请检查浏览器存储后重试'
+  }
+}
+
+const exportBusy = ref(false)
+const downloadPending = ref(false)
+
+/** 只在文件确实已生成后调用；持久化失败不能显示成备份成功 */
+async function persistBackupTime() {
+  try {
+    await settings.setLastBackupAt(new Date().toISOString())
+    downloadPending.value = false
+    return true
+  } catch {
+    msg.value = '备份已生成，但状态未更新'
+    return false
+  }
+}
+
 async function doExport() {
-  const data = await backup.exportAll()
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const file = new File([blob], `jizhang-backup-${stampNow()}.json`, { type: 'application/json' })
-  // 优先系统分享（iOS 可存到文件/隔空投送），降级为下载。
-  // 只有「真正拿到文件」（分享完成或下载触发）才记录备份时间——用户取消分享不算备份。
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title: '记账备份' })
-      await settings.setLastBackupAt(new Date().toISOString())
-      msg.value = '已导出备份'
-    } catch {
-      msg.value = '已取消分享' // 用户点取消：不记录备份时间
+  if (exportBusy.value) return
+  exportBusy.value = true
+  try {
+    const data = await backup.exportAll()
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const file = new File([blob], `jizhang-backup-${stampNow()}.json`, {
+      type: 'application/json',
+    })
+    // 优先系统分享（iOS 可存到文件/隔空投送），降级为下载。
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      let outcome = 'saved'
+      try {
+        await navigator.share({ files: [file], title: '记账备份' })
+      } catch (err) {
+        outcome = classifyShareOutcome(err)
+        msg.value =
+          outcome === 'cancelled' ? '已取消分享，未更新备份时间' : '分享失败，未更新备份时间'
+        return
+      }
+      if (shouldPersistBackup({ method: 'share', outcome })) {
+        if (await persistBackupTime()) msg.value = '已导出备份，请确认文件已保存'
+      }
+      return
     }
-  } else {
+
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = file.name
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 1000) // 立即 revoke 可能截断下载，延迟释放
-    await settings.setLastBackupAt(new Date().toISOString())
-    msg.value = '已导出备份'
+    // 下载无法得知用户是否真的保存成功：不自动记时间，等一次显式确认
+    downloadPending.value = true
+    msg.value = '已生成下载，请确认文件已保存'
+  } catch (err) {
+    msg.value = `导出失败：${err.message}`
+  } finally {
+    exportBusy.value = false
   }
+}
+
+async function confirmDownloaded() {
+  if (!shouldPersistBackup({ method: 'download', confirmed: true })) return
+  if (await persistBackupTime()) msg.value = '备份时间已更新'
 }
 
 const fileInput = ref(null)
@@ -376,23 +450,54 @@ async function confirmImport() {
         />
       </div>
       <p class="placeholder">
-        图片/GIF 至少 {{ bgRequirement.width }}×{{
-          bgRequirement.height
-        }}
+        图片/GIF 至少 {{ bgRequirement.width }}×{{ bgRequirement.height }}
         物理像素（铺满不放大）；视频不限分辨率；图片/GIF 最大 8 MB、视频最大 30
         MB；素材只存本机，不进备份。
       </p>
     </div>
 
     <div class="card block">
-      <div class="row"><span>数据备份</span></div>
-      <!-- 备份健康度：无账目不显示（nothing to back up），有账目按三态提醒 -->
-      <div v-if="backupStatus !== 'none'" class="row bstat">
+      <div class="row">
+        <span>数据备份</span>
+        <span class="cur" data-testid="backup-last-at">上次导出：{{ lastBackupText }}</span>
+      </div>
+      <!-- 事实状态：空账本也显示「尚未备份」；关闭提醒时只隐藏警示，仍保留上次导出时间 -->
+      <div
+        v-if="settings.backupReminderEnabled"
+        class="row bstat"
+        data-testid="backup-status"
+        :data-status="backupStatus"
+      >
         <span class="dot" :class="backupStatus"></span>
         <span :class="backupStatus === 'ok' ? 'dim' : 'warn'">{{ backupStatusText }}</span>
       </div>
       <div class="row">
-        <button class="btn" @click="doExport">导出 JSON</button>
+        <span>提醒周期</span>
+        <select
+          class="select"
+          :value="settings.backupReminderDays"
+          aria-label="备份提醒周期"
+          data-testid="backup-days"
+          @change="setReminderDays"
+        >
+          <option v-for="d in [3, 7, 14, 30]" :key="d" :value="d">{{ d }} 天</option>
+        </select>
+      </div>
+      <div class="row">
+        <span>备份提醒</span>
+        <button
+          class="btn"
+          :aria-pressed="settings.backupReminderEnabled"
+          data-testid="backup-reminder-toggle"
+          @click="toggleReminder"
+        >
+          {{ settings.backupReminderEnabled ? '已开启' : '已关闭' }}
+        </button>
+      </div>
+      <div class="row">
+        <button class="btn" :disabled="exportBusy" data-testid="backup-export" @click="doExport">
+          {{ exportBusy ? '导出中…' : '导出 JSON' }}
+        </button>
         <button class="btn" @click="fileInput.click()">导入 JSON</button>
         <input
           ref="fileInput"
@@ -402,6 +507,14 @@ async function confirmImport() {
           @change="doImport"
         />
       </div>
+      <button
+        v-if="downloadPending"
+        class="btn confirm"
+        data-testid="backup-confirm-saved"
+        @click="confirmDownloaded"
+      >
+        我已保存，更新备份时间
+      </button>
       <div v-if="pendingImport" class="import-preview" data-testid="import-preview">
         <p class="preview-title">导入预览（尚未写入）</p>
         <p class="preview-line">
@@ -422,9 +535,7 @@ async function confirmImport() {
         </p>
         <p v-if="pendingImport.summary.conflicts.length" class="preview-warn">
           有
-          {{
-            pendingImport.summary.conflicts.length
-          }}
+          {{ pendingImport.summary.conflicts.length }}
           个旧默认分类无法唯一匹配，将保留为自定义（不强并）。
         </p>
         <div class="row">
@@ -628,7 +739,8 @@ async function confirmImport() {
   background: var(--danger);
 }
 
-.dot.stale {
+.dot.stale,
+.dot.unknown {
   background: var(--warning);
 }
 
@@ -645,8 +757,31 @@ async function confirmImport() {
   color: var(--warning);
 }
 
+.warn {
+  color: var(--warning);
+}
+
 .dim {
   color: var(--text-secondary);
+}
+
+.select {
+  border: 1px solid var(--glass-edge-2);
+  border-radius: 8px;
+  background: var(--glass-well);
+  color: var(--text);
+  font-size: 13px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.btn.confirm {
+  width: 100%;
+  margin: 6px 0 2px;
+}
+
+.btn:disabled {
+  opacity: 0.55;
 }
 
 .input {
