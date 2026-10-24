@@ -11,6 +11,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { useCategoriesStore } from '@/stores/categories'
 import { useRecordsStore } from '@/stores/records'
 import { toFen, fenToYuan, fenToInput, todayStr } from '@/utils/format'
+import {
+  describeDeleteFailure,
+  describeWriteFailure,
+  DELETE_MESSAGES,
+  WRITE_MESSAGES,
+} from '@/services/writeOutcome'
 import AmountPad from '@/components/AmountPad.vue'
 import CategoryGrid from '@/components/CategoryGrid.vue'
 import GlassPanel from '@/components/GlassPanel.vue'
@@ -64,6 +70,7 @@ function showToast(msg) {
 }
 
 let confirmTimer = null
+let backTimer = null
 
 onMounted(async () => {
   // 冷启动直接访问 /record/:id 时 store 可能尚未加载：先补一次加载，再判定「找不到」
@@ -85,6 +92,7 @@ onMounted(async () => {
 onUnmounted(() => {
   clearTimeout(toastTimer)
   clearTimeout(confirmTimer)
+  clearTimeout(backTimer)
 })
 
 function switchType(t) {
@@ -106,7 +114,7 @@ async function save() {
   saving.value = true
   try {
     // 整行覆盖；repository 会刷新 updatedAt（编辑不刷新分类 lastUsedAt，编辑 ≠ 使用）
-    await records.update({
+    const { refreshFailed } = await records.update({
       ...rec.value,
       amount: fen,
       type: type.value,
@@ -115,7 +123,17 @@ async function save() {
       date: date.value,
       private: isPrivate.value,
     })
+    if (refreshFailed) {
+      // 写库已成功：显示“已保存”并稍后返回，绝不把本条留在页上误导重复提交
+      showToast(WRITE_MESSAGES.refreshFailed)
+      clearTimeout(backTimer)
+      backTimer = setTimeout(() => router.back(), 1200)
+      return
+    }
     router.back()
+  } catch (err) {
+    // 失败留在本页，输入与分类选择原样保留
+    showToast(describeWriteFailure(err).message)
   } finally {
     saving.value = false
   }
@@ -139,8 +157,17 @@ async function remove() {
   deleting.value = true
   try {
     // undoable：让流水页弹出「已删除，点这里撤销」
-    await records.softDelete(rec.value.id, { undoable: true })
+    const { refreshFailed } = await records.softDelete(rec.value.id, { undoable: true })
+    if (refreshFailed) {
+      showToast(DELETE_MESSAGES.refreshFailed)
+      clearTimeout(backTimer)
+      backTimer = setTimeout(() => router.replace('/list'), 1200)
+      return
+    }
     router.replace('/list')
+  } catch (err) {
+    // 删除失败留在本页；两段式确认已复位，可直接重试
+    showToast(describeDeleteFailure(err))
   } finally {
     deleting.value = false
   }

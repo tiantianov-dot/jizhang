@@ -9,6 +9,7 @@ import { computed, onUnmounted, reactive, ref } from 'vue'
 import { useCategoriesStore } from '@/stores/categories'
 import { fenToInput, toFen } from '@/utils/format'
 import { isBuiltinCategory } from '@/services/builtinCategories'
+import { classifyWriteError, DELETE_MESSAGES, WRITE_MESSAGES } from '@/services/writeOutcome'
 import IconColorPicker from '@/components/IconColorPicker.vue'
 
 const props = defineProps({
@@ -35,6 +36,17 @@ const form = reactive({
 const busy = ref(false)
 const confirming = ref(false)
 let confirmTimer = null
+
+/**
+ * DOMException 是存储错误，走 failed/unknown 文案；
+ * 普通 Error 是 repository 的业务拒绝（内置保护/分类不存在），保留原 message。
+ */
+function messageFor(err, messages) {
+  if (err && typeof err.name === 'string' && err.name !== 'Error') {
+    return messages[classifyWriteError(err)]
+  }
+  return err?.message || '操作失败'
+}
 
 onUnmounted(() => clearTimeout(confirmTimer))
 
@@ -64,6 +76,9 @@ async function submit() {
       monthlyBudget: Math.max(0, toFen(form.budget) || 0),
     })
     emit('done', isEdit.value ? '已保存' : '已新增')
+  } catch (err) {
+    // 只提示、不收表单，用户可修正后重试
+    emit('notice', messageFor(err, WRITE_MESSAGES))
   } finally {
     busy.value = false
   }
@@ -94,7 +109,7 @@ async function remove() {
         : '已删除',
     )
   } catch (err) {
-    emit('notice', err.message)
+    emit('notice', messageFor(err, DELETE_MESSAGES))
   } finally {
     busy.value = false
   }

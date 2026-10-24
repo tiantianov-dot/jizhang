@@ -8,6 +8,12 @@ import { useBackgroundStore } from '@/stores/background'
 import { useImmersive } from '@/composables/useImmersive'
 import { toFen, fenToYuan, fenToInput, todayStr } from '@/utils/format'
 import { parseEntryQuery, parseEntryJson } from '@/services/entry'
+import {
+  describeUndoFailure,
+  describeWriteFailure,
+  UNDO_MESSAGES,
+  WRITE_MESSAGES,
+} from '@/services/writeOutcome'
 import AmountPad from '@/components/AmountPad.vue'
 import CategoryGrid from '@/components/CategoryGrid.vue'
 import GlassPanel from '@/components/GlassPanel.vue'
@@ -28,6 +34,9 @@ const date = ref(todayStr())
 const isPrivate = ref(false) // 私密账单：只存本地，永不同步（Phase 3 同步时跳过）
 const saving = ref(false) // 写库期间禁用 ✓，避免连点重复入账
 const toast = ref('')
+
+let toastTimer = null
+let lastSavedId = null
 
 const {
   state: immersiveState,
@@ -204,14 +213,13 @@ async function pasteEntry() {
   showToast(hadInput ? '已覆盖原输入' : '已从剪贴板填入')
 }
 
-let toastTimer = null
-function showToast(msg) {
+function showToast(msg, { undoable = false, keepUndo = false } = {}) {
+  // 非撤销类提示（校验/粘贴/相机/失败）必须清掉旧撤销句柄，避免点提示误删上一笔
+  if (!undoable && !keepUndo) lastSavedId = null
   toast.value = msg
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => (toast.value = ''), 4000)
 }
-
-let lastSavedId = null
 
 async function save() {
   if (saving.value) return
@@ -226,8 +234,10 @@ async function save() {
   }
   const cat = categories.byId(activeCat.value)
   saving.value = true
+  // 新一次保存开始前清掉旧撤销句柄：失败提示不能被误点成“撤销上一笔”
+  lastSavedId = null
   try {
-    const rec = await records.add({
+    const { record, refreshFailed } = await records.add({
       amount: fen,
       type: type.value,
       categoryId: activeCat.value,
@@ -235,10 +245,17 @@ async function save() {
       date: date.value,
       private: isPrivate.value,
     })
-    lastSavedId = rec.id
+    // 写库成功后才清空输入；失败（catch）保留金额/备注/日期/分类
     buffer.value = ''
     note.value = ''
-    showToast(`已记 ${cat ? cat.name : ''} ¥${fenToYuan(fen)}，点这里撤销`)
+    if (refreshFailed) {
+      showToast(WRITE_MESSAGES.refreshFailed)
+      return
+    }
+    lastSavedId = record.id
+    showToast(`已记 ${cat ? cat.name : ''} ¥${fenToYuan(fen)}，点这里撤销`, { undoable: true })
+  } catch (err) {
+    showToast(describeWriteFailure(err).message)
   } finally {
     saving.value = false
   }
@@ -246,12 +263,19 @@ async function save() {
 
 async function undo() {
   if (!lastSavedId) {
-    toast.value = '' // 仅提示类 toast（入口预填反馈）没有可撤销的账目，点击即关闭
+    toast.value = '' // 仅提示类 toast（入口预填/失败反馈）没有可撤销的账目，点击即关闭
     return
   }
-  await records.softDelete(lastSavedId)
-  lastSavedId = null
-  toast.value = ''
+  const id = lastSavedId
+  try {
+    const { refreshFailed } = await records.softDelete(id)
+    lastSavedId = null
+    toast.value = ''
+    if (refreshFailed) showToast(UNDO_MESSAGES.refreshFailed)
+  } catch (err) {
+    // 保留撤销句柄，用户可再点一次；不假装撤销成功
+    showToast(describeUndoFailure(err), { keepUndo: true })
+  }
 }
 </script>
 
@@ -282,9 +306,7 @@ async function undo() {
       <input v-model="note" class="note" placeholder="备注（可选）" maxlength="30" />
       <div class="right">
         <input v-model="date" class="date" type="date" />
-        <button class="paste pill" title="从剪贴板读取记账内容" @click="pasteEntry">
-          ⌘ 粘贴
-        </button>
+        <button class="paste pill" title="从剪贴板读取记账内容" @click="pasteEntry">⌘ 粘贴</button>
         <button
           class="lock pill"
           :class="{ on: isPrivate }"

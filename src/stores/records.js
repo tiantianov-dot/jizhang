@@ -2,6 +2,19 @@ import { defineStore } from 'pinia'
 import * as recordsRepo from '@/repositories/records'
 import * as stats from '@/services/stats'
 
+/**
+ * 写库成功后 reload 失败不能当成“未保存”：返回 refreshFailed，
+ * 由 UI 显示“已保存，列表暂未刷新”，避免用户重复提交。
+ */
+async function reloadQuietly(store) {
+  try {
+    await store.load()
+    return false
+  } catch {
+    return true
+  }
+}
+
 export const useRecordsStore = defineStore('records', {
   state: () => ({
     /** @type {import('@/models').RecordItem[]} 未删除记录，日期倒序 */
@@ -20,28 +33,35 @@ export const useRecordsStore = defineStore('records', {
     async load() {
       this.list = await recordsRepo.list()
     },
+    /** @returns {Promise<{record: object, refreshFailed: boolean}>} */
     async add(data) {
-      const rec = await recordsRepo.add(data)
-      await this.load()
-      return rec
+      const record = await recordsRepo.add(data)
+      const refreshFailed = await reloadQuietly(this)
+      return { record, refreshFailed }
     },
+    /** @returns {Promise<{record: object, refreshFailed: boolean}>} */
     async update(rec) {
-      await recordsRepo.update(rec)
-      await this.load()
+      const record = await recordsRepo.update(rec)
+      const refreshFailed = await reloadQuietly(this)
+      return { record, refreshFailed }
     },
     /**
      * 软删除。undoable = true 时标记 lastDeletedId，供流水页展示「点这里撤销」
      * （记一笔页的即时撤销自带 id，不需要标记）。
+     * @returns {Promise<{record: object|null, refreshFailed: boolean}>}
      */
     async softDelete(id, { undoable = false } = {}) {
-      await recordsRepo.softDelete(id)
-      if (undoable) this.lastDeletedId = id
-      await this.load()
+      const record = await recordsRepo.softDelete(id)
+      if (undoable && record) this.lastDeletedId = id
+      const refreshFailed = await reloadQuietly(this)
+      return { record, refreshFailed }
     },
+    /** @returns {Promise<{record: object|null, refreshFailed: boolean}>} */
     async restore(id) {
-      await recordsRepo.restore(id)
+      const record = await recordsRepo.restore(id)
       if (this.lastDeletedId === id) this.lastDeletedId = null
-      await this.load()
+      const refreshFailed = await reloadQuietly(this)
+      return { record, refreshFailed }
     },
     /** 撤销提示消失后清除标记（撤销入口已失效） */
     clearLastDeleted() {

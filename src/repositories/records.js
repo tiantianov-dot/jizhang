@@ -6,8 +6,9 @@
  * 字段含义见 src/models.js 的 RecordItem typedef。
  */
 
-import { uuid, putOne, getOne, getAll, countByIndex } from '@/db'
+import { uuid, putOne, getOne, getAll, countByIndex, atomicWrite } from '@/db'
 import { todayStr } from '@/utils/format'
+import { tagWriteError } from '@/services/writeOutcome'
 
 /**
  * 记一笔。data 至少提供 { amount(分), type, categoryId }，其余字段自动补全。
@@ -31,18 +32,24 @@ export async function add(data) {
     owner: 'me',
     ...data,
   }
-  await putOne('records', rec)
-
-  // 驱动「最近使用排序」：记账即刷新分类的 lastUsedAt。
-  // 这是本地使用信号，不参与同步 —— 因此绝不能同时刷新 cat.updatedAt，
-  // 否则「我用了一次分类」会被合并成一次分类编辑推给对方（破坏约定 5）。
+  // 读分类失败时尚未开始写库，可确定 failed；记账 + lastUsedAt 放进同一事务，
+  // 避免“record 已提交、分类更新失败”被调用方当成整笔失败。
+  let cat = null
   if (rec.categoryId) {
-    const cat = await getOne('categories', rec.categoryId)
-    if (cat) {
-      cat.lastUsedAt = now
-      await putOne('categories', cat)
+    try {
+      cat = await getOne('categories', rec.categoryId)
+    } catch (err) {
+      throw tagWriteError(err, 'failed')
     }
   }
+
+  const puts = { records: [rec] }
+  if (cat) {
+    // 这是本地使用信号，不参与同步 —— 绝不能同时刷新 cat.updatedAt，
+    // 否则「我用了一次分类」会被合并成一次分类编辑推给对方（破坏约定 5）。
+    puts.categories = [{ ...cat, lastUsedAt: now }]
+  }
+  await atomicWrite({ puts })
   return rec
 }
 
