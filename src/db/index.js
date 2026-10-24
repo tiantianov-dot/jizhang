@@ -12,6 +12,7 @@
  */
 
 import { seedIfEmpty } from './seed'
+import { migrateBuiltinIdentity } from './migrations'
 
 const DB_NAME = 'jizhang'
 const DB_VERSION = 1
@@ -81,7 +82,9 @@ export function tx(store, mode, fn) {
           // 回调同步抛错时事务里已排队的请求会被提交，必须显式 abort 才能整体回滚
           try {
             t.abort()
-          } catch {}
+          } catch {
+            // 事务可能已自行 abort，忽略重复 abort 异常
+          }
           reject(err)
           return
         }
@@ -113,6 +116,74 @@ export async function deleteOne(store, key) {
   await tx(store, 'readwrite', (s) => s.delete(key))
 }
 
+/**
+ * 多 store 原子写：同一个 readwrite 事务内同步排队全部 put/delete。
+ * 回调不穿插 await；任一 request 失败或同步抛错都显式 abort，只有 oncomplete 才成功。
+ *
+ * @param {{puts?: Object<string, object[]>, deletes?: Object<string, IDBValidKey[]>}} plan
+ */
+export function atomicWrite(plan = {}) {
+  const puts = plan.puts || {}
+  const deletes = plan.deletes || {}
+  const names = new Set()
+  for (const [store, rows] of Object.entries(puts)) {
+    if (Array.isArray(rows) && rows.length) names.add(store)
+  }
+  for (const [store, keys] of Object.entries(deletes)) {
+    if (Array.isArray(keys) && keys.length) names.add(store)
+  }
+  if (!names.size) return Promise.resolve()
+
+  return open().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const t = db.transaction([...names], 'readwrite')
+        let settled = false
+        const fail = (err) => {
+          if (settled) return
+          settled = true
+          try {
+            t.abort()
+          } catch {
+            // 事务可能已自行 abort，忽略重复 abort 异常
+          }
+          reject(err)
+        }
+
+        t.oncomplete = () => {
+          if (settled) return
+          settled = true
+          resolve()
+        }
+        t.onerror = () => {
+          if (settled) return
+          settled = true
+          reject(t.error)
+        }
+        t.onabort = () => {
+          if (settled) return
+          settled = true
+          reject(t.error || new Error('transaction aborted'))
+        }
+
+        try {
+          for (const [store, rows] of Object.entries(puts)) {
+            if (!Array.isArray(rows) || rows.length === 0) continue
+            const objectStore = t.objectStore(store)
+            for (const row of rows) objectStore.put(row)
+          }
+          for (const [store, keys] of Object.entries(deletes)) {
+            if (!Array.isArray(keys) || keys.length === 0) continue
+            const objectStore = t.objectStore(store)
+            for (const key of keys) objectStore.delete(key)
+          }
+        } catch (err) {
+          fail(err)
+        }
+      }),
+  )
+}
+
 export async function countByIndex(store, indexName, key) {
   const db = await open()
   return wrap(db.transaction(store).objectStore(store).index(indexName).count(key))
@@ -125,8 +196,9 @@ export function uuid() {
 
 /* ---------- 初始化 ---------- */
 
-/** 应用启动入口：打开数据库，并在首次启动时写入默认分类/默认设置 */
+/** 应用启动入口：打开数据库，首次播种，再执行一次性内置身份迁移 */
 export async function initDB() {
   await open()
   await seedIfEmpty()
+  await migrateBuiltinIdentity()
 }

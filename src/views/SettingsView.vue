@@ -112,9 +112,7 @@ const bgRequirement = coverRequirement({
   dpr: window.devicePixelRatio,
   screenW: window.screen && window.screen.width,
   screenH: window.screen && window.screen.height,
-  coarse:
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(pointer: coarse)').matches,
+  coarse: typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches,
 })
 
 async function startPick() {
@@ -186,19 +184,65 @@ async function doExport() {
 }
 
 const fileInput = ref(null)
+const pendingImport = ref(null)
+const importBusy = ref(false)
+
+function describeImportErrors(errors) {
+  const messages = errors.slice(0, 3).map((item) => item.message)
+  const suffix = errors.length > 3 ? `（共 ${errors.length} 项）` : ''
+  return `${messages.join('；')}${suffix}`
+}
+
+function importSummaryText(summary) {
+  const r = summary.records
+  const c = summary.categories
+  const s = summary.settings
+  return [
+    `账目 新增 ${r.added} · 更新 ${r.updated} · 跳过 ${r.skipped}`,
+    `分类 新增 ${c.added} · 匹配 ${c.matched} · 更新 ${c.updated} · 跳过 ${c.skipped} · 冲突 ${c.conflicts}`,
+    `设置 更新 ${s.updated} · 跳过 ${s.skipped}`,
+  ].join('；')
+}
 
 async function doImport(e) {
   const file = e.target.files && e.target.files[0]
   if (!file) return
   try {
     const payload = JSON.parse(await file.text())
-    const { added, updated } = await backup.importMerge(payload)
+    const preview = await backup.previewImport(payload)
+    if (preview.errors.length) {
+      msg.value = `导入失败：${describeImportErrors(preview.errors)}`
+      pendingImport.value = null
+      return
+    }
+    pendingImport.value = { payload, summary: preview.summary }
+    msg.value = ''
+  } catch (err) {
+    msg.value = `导入失败：${err.message}`
+    pendingImport.value = null
+  } finally {
+    e.target.value = ''
+  }
+}
+
+function cancelImport() {
+  if (importBusy.value) return
+  pendingImport.value = null
+  msg.value = '已取消导入'
+}
+
+async function confirmImport() {
+  if (!pendingImport.value || importBusy.value) return
+  importBusy.value = true
+  try {
+    const summary = await backup.importMerge(pendingImport.value.payload)
     await Promise.all([records.load(), categories.load(), settings.load(), appearance.load()])
-    msg.value = `导入完成：新增 ${added} 条，更新 ${updated} 条`
+    pendingImport.value = null
+    msg.value = `导入完成：${importSummaryText(summary)}`
   } catch (err) {
     msg.value = `导入失败：${err.message}`
   } finally {
-    e.target.value = ''
+    importBusy.value = false
   }
 }
 </script>
@@ -210,10 +254,18 @@ async function doImport(e) {
     <div class="card block">
       <div class="row">
         <span>月度总预算</span>
-        <span class="cur">{{ settings.monthlyBudget ? '¥' + (settings.monthlyBudget / 100).toFixed(2) : '未设置' }}</span>
+        <span class="cur">{{
+          settings.monthlyBudget ? '¥' + (settings.monthlyBudget / 100).toFixed(2) : '未设置'
+        }}</span>
       </div>
       <div class="row">
-        <input v-model="budgetInput" class="input" type="number" inputmode="decimal" placeholder="输入金额（元），0 = 取消" />
+        <input
+          v-model="budgetInput"
+          class="input"
+          type="number"
+          inputmode="decimal"
+          placeholder="输入金额（元），0 = 取消"
+        />
         <button class="btn" @click="saveBudget">保存</button>
       </div>
     </div>
@@ -303,15 +355,14 @@ async function doImport(e) {
           alt=""
         />
       </div>
-      <p v-if="background.blocked" class="bg-warn">分辨率不足（{{ background.blocked.width }}×{{ background.blocked.height }}），已暂用星空；请恢复星空后重新上传。</p>
+      <p v-if="background.blocked" class="bg-warn">
+        分辨率不足（{{ background.blocked.width }}×{{
+          background.blocked.height
+        }}），已暂用星空；请恢复星空后重新上传。
+      </p>
       <div class="row">
         <button class="btn" data-testid="bg-upload" @click="startPick">上传图片/视频</button>
-        <button
-          v-if="background.descriptor"
-          class="btn"
-          data-testid="bg-remove"
-          @click="removeBg"
-        >
+        <button v-if="background.descriptor" class="btn" data-testid="bg-remove" @click="removeBg">
           恢复星空
         </button>
         <input
@@ -324,7 +375,13 @@ async function doImport(e) {
           @cancel="pickerOpen = false"
         />
       </div>
-      <p class="placeholder">图片/GIF 至少 {{ bgRequirement.width }}×{{ bgRequirement.height }} 物理像素（铺满不放大）；视频不限分辨率；图片/GIF 最大 8 MB、视频最大 30 MB；素材只存本机，不进备份。</p>
+      <p class="placeholder">
+        图片/GIF 至少 {{ bgRequirement.width }}×{{
+          bgRequirement.height
+        }}
+        物理像素（铺满不放大）；视频不限分辨率；图片/GIF 最大 8 MB、视频最大 30
+        MB；素材只存本机，不进备份。
+      </p>
     </div>
 
     <div class="card block">
@@ -337,7 +394,45 @@ async function doImport(e) {
       <div class="row">
         <button class="btn" @click="doExport">导出 JSON</button>
         <button class="btn" @click="fileInput.click()">导入 JSON</button>
-        <input ref="fileInput" type="file" accept="application/json,.json" hidden @change="doImport" />
+        <input
+          ref="fileInput"
+          type="file"
+          accept="application/json,.json"
+          hidden
+          @change="doImport"
+        />
+      </div>
+      <div v-if="pendingImport" class="import-preview" data-testid="import-preview">
+        <p class="preview-title">导入预览（尚未写入）</p>
+        <p class="preview-line">
+          账目：新增 {{ pendingImport.summary.records.added }} · 更新
+          {{ pendingImport.summary.records.updated }} · 跳过
+          {{ pendingImport.summary.records.skipped }}
+        </p>
+        <p class="preview-line">
+          分类：新增 {{ pendingImport.summary.categories.added }} · 匹配
+          {{ pendingImport.summary.categories.matched }} · 更新
+          {{ pendingImport.summary.categories.updated }} · 跳过
+          {{ pendingImport.summary.categories.skipped }} · 冲突
+          {{ pendingImport.summary.categories.conflicts }}
+        </p>
+        <p class="preview-line">
+          设置：更新 {{ pendingImport.summary.settings.updated }} · 跳过
+          {{ pendingImport.summary.settings.skipped }}
+        </p>
+        <p v-if="pendingImport.summary.conflicts.length" class="preview-warn">
+          有
+          {{
+            pendingImport.summary.conflicts.length
+          }}
+          个旧默认分类无法唯一匹配，将保留为自定义（不强并）。
+        </p>
+        <div class="row">
+          <button class="btn" :disabled="importBusy" @click="cancelImport">取消</button>
+          <button class="btn" :disabled="importBusy" @click="confirmImport">
+            {{ importBusy ? '导入中…' : '确认导入' }}
+          </button>
+        </div>
       </div>
       <p class="placeholder">
         数据只存在这台设备的浏览器里（IndexedDB）。清缓存、换设备前请先导出——这是底线功能。<br />
@@ -406,8 +501,7 @@ async function doImport(e) {
   background:
     radial-gradient(120% 130% at 15% 20%, #d85a30 0%, transparent 55%),
     radial-gradient(110% 120% at 85% 25%, #185fa5 0%, transparent 60%),
-    radial-gradient(140% 120% at 50% 110%, #0f6e56 0%, transparent 70%),
-    #2a2a30;
+    radial-gradient(140% 120% at 50% 110%, #0f6e56 0%, transparent 70%), #2a2a30;
 }
 
 /* 背景预览卡：零 backdrop-filter、非 fixed */
@@ -492,6 +586,34 @@ async function doImport(e) {
 .bstat {
   justify-content: flex-start;
   font-size: 13px;
+}
+
+.import-preview {
+  margin: 6px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-edge-2);
+  border-radius: 10px;
+  background: var(--glass-well);
+}
+
+.preview-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.preview-line {
+  margin: 2px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.preview-warn {
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--warning);
+  line-height: 1.6;
 }
 
 .dot {

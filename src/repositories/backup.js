@@ -1,30 +1,27 @@
 /**
  * repositories/backup.js — 导出 / 导入 JSON（防清缓存丢数据的底线功能）
  *
- * 导出：records/categories 按 purpose 区分——backup（默认，本地换机）保留 private，
- * sync/share 剔除 private；settings 永远走键白名单（lastBackupAt / syncConfig
- * 及未来未知键永不外发）。
- * 导入：合并规则集中在 services/merge.js —— records/categories 按 id 对齐、
- * updatedAt 新者胜；settings 同样只落白名单键，旧备份不能回滚设备本地状态。
- * 注意：导入的记录若带 deleted/private 标记会原样保留（与同步语义一致）。
+ * 导出：version 2；records/categories 按 purpose 区分——backup（默认，本地换机）
+ * 保留 private 与软删墓碑，sync/share 剔除 private；settings 永远走键白名单
+ * （lastBackupAt / builtinIdentityVersion / seedVersion / syncConfig 永不外发）。
+ *
+ * 导入：校验、映射、settings 决策全部由 services/importPlanner.js 在开事务前完成；
+ * 预览与正式导入共用同一 planner（预览只读，确认时重新读本地并重新规划）。
+ * 写入走 db.atomicWrite 的多 store 单事务，任一失败三 store 全部回滚。
  */
 
-import { getAll, putOne } from '@/db'
-import { mergeCategories, mergeRecords } from '@/services/merge'
+import { atomicWrite, getAll } from '@/db'
+import { EXPORTABLE_SETTING_KEYS } from '@/services/backupValidation'
+import { ImportValidationError, planImport } from '@/services/importPlanner'
 
 const APP_TAG = 'jizhang'
-const BACKUP_VERSION = 1
+export const BACKUP_VERSION = 2
 
 /** 可导出的 settings 键（fail-closed：不在名单里的键一律不导出/不导入） */
-const EXPORTABLE_SETTING_KEYS = new Set([
-  'monthlyBudget',
-  'ownerName',
-  'uiGlassIntensity',
-  'uiGlassFill',
-])
+const EXPORTABLE_SETTING_KEY_SET = new Set(EXPORTABLE_SETTING_KEYS)
 
 function isExportableSetting(row) {
-  return !!row && EXPORTABLE_SETTING_KEYS.has(row.key)
+  return !!row && EXPORTABLE_SETTING_KEY_SET.has(row.key)
 }
 
 /**
@@ -49,25 +46,31 @@ export async function exportAll({ purpose = 'backup' } = {}) {
   }
 }
 
-/**
- * @param {Object} payload exportAll() 产出的对象
- * @returns {Promise<{added: number, updated: number}>} records 的合并统计
- */
-export async function importMerge(payload) {
-  if (!payload || payload.app !== APP_TAG) throw new Error('不是本应用的备份文件')
-
-  const [localRecords, localCategories] = await Promise.all([
+async function readLocal() {
+  const [localRecords, localCategories, localSettings] = await Promise.all([
     getAll('records'),
     getAll('categories'),
+    getAll('settings'),
   ])
-  const mergedRecords = mergeRecords(localRecords, payload.records)
-  const mergedCategories = mergeCategories(localCategories, payload.categories)
+  return { localRecords, localCategories, localSettings }
+}
 
-  for (const rec of mergedRecords.puts) await putOne('records', rec)
-  for (const cat of mergedCategories.puts) await putOne('categories', cat)
-  for (const row of (payload.settings || []).filter(isExportableSetting)) {
-    await putOne('settings', row)
-  }
+/**
+ * 只读预览：不写库，返回与正式导入相同的 planner summary / errors。
+ * @returns {Promise<{summary: object, errors: object[]}>}
+ */
+export async function previewImport(payload) {
+  const plan = planImport(payload, await readLocal())
+  return { summary: plan.summary, errors: plan.errors }
+}
 
-  return { added: mergedRecords.added, updated: mergedRecords.updated }
+/**
+ * 正式导入：重新读取本地 → 重新规划 → 有错误整份拒绝 → 一次原子提交。
+ * @returns {Promise<object>} planner summary
+ */
+export async function importMerge(payload) {
+  const plan = planImport(payload, await readLocal())
+  if (plan.errors.length) throw new ImportValidationError(plan.errors)
+  await atomicWrite({ puts: plan.writes })
+  return plan.summary
 }

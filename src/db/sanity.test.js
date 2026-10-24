@@ -77,7 +77,9 @@ test('对照：回调抛错但不 abort 时，已排队的 put 仍会提交（�
   // 事务外同步抛错不会自动回滚，已排队的请求仍会提交
   try {
     throw new Error('control: throw without abort')
-  } catch {}
+  } catch {
+    // 故意在事务外吞掉异常，证明 IDB 不会因此自动回滚
+  }
   await new Promise((resolve, reject) => {
     t.oncomplete = resolve
     t.onerror = () => reject(t.error)

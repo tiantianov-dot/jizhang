@@ -1,55 +1,65 @@
 /**
  * db/seed.js — 首次启动的种子数据
  *
- * 仅当 categories 为空（= 首次启动）时写入默认分类与默认设置；
- * 用户删光分类后不会被反复重建（count > 0 即跳过）。
+ * 内置分类使用固定 ID（services/builtinCategories.js），跨设备稳定。
+ * 是否首次初始化由 settings 的 seedVersion 标记决定：
+ * - 旧库（已有分类或设置但无标记）只补缺失的默认设置并打标记，不补分类、不覆盖预算/ownerName
+ * - 用户删光分类后不会复种（标记仍在）
+ * - true 首次初始化：16 个固定内置分类 + 缺失的默认设置 + 标记，同一事务提交
  */
 
-import { open, tx, wrap, uuid } from './index'
+import { atomicWrite, getAll, getOne } from './index'
+import { BUILTIN_CATEGORIES } from '@/services/builtinCategories'
 
-/** 默认分类：支出 11 个 + 收入 5 个；order 按声明顺序 */
-const SEED_CATEGORIES = [
-  // 支出
-  { name: '餐饮', emoji: '🍚', color: '#D85A30', type: 'expense' },
-  { name: '交通', emoji: '🚌', color: '#185FA5', type: 'expense' },
-  { name: '购物', emoji: '🛍️', color: '#993556', type: 'expense' },
-  { name: '日用', emoji: '🧻', color: '#854F0B', type: 'expense' },
-  { name: '居住', emoji: '🏠', color: '#534AB7', type: 'expense' },
-  { name: '娱乐', emoji: '🎮', color: '#0F6E56', type: 'expense' },
-  { name: '医疗', emoji: '💊', color: '#A32D2D', type: 'expense' },
-  { name: '社交', emoji: '🎁', color: '#D4537E', type: 'expense' },
-  { name: '学习', emoji: '📚', color: '#3B6D11', type: 'expense' },
-  { name: '通讯', emoji: '📱', color: '#378ADD', type: 'expense' },
-  { name: '其他', emoji: '📦', color: '#5F5E5A', type: 'expense' },
-  // 收入
-  { name: '工资', emoji: '💰', color: '#0F6E56', type: 'income' },
-  { name: '兼职', emoji: '🧧', color: '#BA7517', type: 'income' },
-  { name: '理财', emoji: '📈', color: '#993C1D', type: 'income' },
-  { name: '红包', emoji: '🧧', color: '#E24B4A', type: 'income' },
-  { name: '其他', emoji: '📦', color: '#5F5E5A', type: 'income' },
-]
+export const SEED_MARKER_KEY = 'seedVersion'
+export const SEED_VERSION = 1
+
+function defaultSettingRows(now, existingKeys) {
+  const rows = []
+  if (!existingKeys.has('monthlyBudget')) {
+    rows.push({ key: 'monthlyBudget', value: 0, updatedAt: now })
+  }
+  if (!existingKeys.has('ownerName')) {
+    rows.push({ key: 'ownerName', value: '', updatedAt: now })
+  }
+  return rows
+}
 
 export async function seedIfEmpty() {
-  const count = await wrap((await open()).transaction('categories').objectStore('categories').count())
-  if (count > 0) return
+  const marker = await getOne('settings', SEED_MARKER_KEY)
+  if (marker) return false
 
+  const [categories, settings] = await Promise.all([getAll('categories'), getAll('settings')])
   const now = Date.now()
-  await tx('categories', 'readwrite', (s) => {
-    SEED_CATEGORIES.forEach((c, i) => {
-      s.put({
-        id: uuid(),
-        ...c,
-        monthlyBudget: 0,
-        order: i,
-        archived: false,
-        lastUsedAt: 0,
-        createdAt: now,
-        updatedAt: now,
-      })
-    })
+  const existingKeys = new Set(settings.map((row) => row.key))
+  const missingSettings = defaultSettingRows(now, existingKeys)
+  const markerRow = { key: SEED_MARKER_KEY, value: SEED_VERSION, updatedAt: now }
+
+  // 旧库升级：已有任何分类或设置就说明不是首次启动；只补标记/缺失默认值
+  if (categories.length > 0 || settings.length > 0) {
+    await atomicWrite({ puts: { settings: [...missingSettings, markerRow] } })
+    return false
+  }
+
+  const seedCategories = BUILTIN_CATEGORIES.map((category) => ({
+    id: category.id,
+    name: category.name,
+    emoji: category.emoji,
+    color: category.color,
+    type: category.type,
+    monthlyBudget: 0,
+    order: category.order,
+    archived: false,
+    lastUsedAt: 0,
+    createdAt: now,
+    updatedAt: now,
+  }))
+
+  await atomicWrite({
+    puts: {
+      categories: seedCategories,
+      settings: [...missingSettings, markerRow],
+    },
   })
-  await tx('settings', 'readwrite', (s) => {
-    s.put({ key: 'monthlyBudget', value: 0, updatedAt: now }) // 月度总预算（分），0 = 不设
-    s.put({ key: 'ownerName', value: '', updatedAt: now })
-  })
+  return true
 }

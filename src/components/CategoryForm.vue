@@ -8,6 +8,7 @@
 import { computed, onUnmounted, reactive, ref } from 'vue'
 import { useCategoriesStore } from '@/stores/categories'
 import { fenToInput, toFen } from '@/utils/format'
+import { isBuiltinCategory } from '@/services/builtinCategories'
 import IconColorPicker from '@/components/IconColorPicker.vue'
 
 const props = defineProps({
@@ -20,6 +21,7 @@ const emit = defineEmits(['done', 'cancel', 'notice'])
 const categories = useCategoriesStore()
 
 const isEdit = computed(() => !!props.cat)
+const builtin = computed(() => isBuiltinCategory(props.cat))
 
 const form = reactive({
   name: props.cat ? props.cat.name : '',
@@ -91,6 +93,8 @@ async function remove() {
         ? '该分类有流水引用，已归档：历史账目保留原样，记账时不再出现'
         : '已删除',
     )
+  } catch (err) {
+    emit('notice', err.message)
   } finally {
     busy.value = false
   }
@@ -130,9 +134,10 @@ async function remove() {
       <button class="btn" :disabled="busy" @click="submit">{{ busy ? '处理中…' : '保存' }}</button>
     </div>
 
-    <!-- 删除：两段式确认（仅编辑态；新增态无 id 可删） -->
+    <!-- 删除：两段式确认（仅编辑态；新增态无 id 可删；内置分类受保护） -->
+    <p v-if="builtin" class="hint">内置分类，受保护，不可删除</p>
     <button
-      v-if="isEdit"
+      v-if="isEdit && !builtin"
       class="del"
       :class="{ warn: confirming }"
       :disabled="busy"
@@ -244,10 +249,17 @@ async function remove() {
 .del {
   padding: 10px 0;
   border-radius: 10px;
-  border: 1px solid rgba(163, 45, 45, .55);
-  background: rgba(163, 45, 45, .22);
+  border: 1px solid rgba(163, 45, 45, 0.55);
+  background: rgba(163, 45, 45, 0.22);
   color: #fff;
   font-size: 14px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
 }
 
 .del.warn {
