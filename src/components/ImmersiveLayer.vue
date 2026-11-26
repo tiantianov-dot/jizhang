@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
+import { playMediaSafely } from '@/utils/media'
 
 const props = defineProps({
   state: { type: String, default: 'closed' },
@@ -13,7 +14,7 @@ function bindStream() {
   const el = videoEl.value
   if (!el) return
   el.srcObject = props.stream || null
-  if (props.stream) el.play().catch(() => {})
+  if (props.stream) playMediaSafely(el)
 }
 
 watch(() => props.stream, bindStream)
@@ -30,7 +31,6 @@ onMounted(bindStream)
         ref="videoEl"
         class="immersive-video"
         data-testid="immersive-video"
-        style="transform: translateZ(0)"
         autoplay
         playsinline
         muted
@@ -44,7 +44,7 @@ onMounted(bindStream)
 .immersive {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: var(--z-bg-immersive);
   pointer-events: none;
 }
 
@@ -59,6 +59,7 @@ onMounted(bindStream)
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transform: translateZ(0);
   will-change: transform;
 }
 

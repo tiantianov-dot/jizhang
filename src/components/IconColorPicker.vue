@@ -81,7 +81,7 @@ const emojiText = computed({
   flex: 1;
   min-width: 0;
   border: 1px solid var(--glass-edge-2);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--glass-well);
   color: var(--text);
   font-size: 14px;
@@ -122,7 +122,7 @@ const emojiText = computed({
 .def {
   width: auto;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--glass-radius-pill);
   color: var(--text-secondary);
   font-size: 12px;
 }

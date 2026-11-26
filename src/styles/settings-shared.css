@@ -1,0 +1,36 @@
+/* settings-shared.css — 设置页各卡片完全等价的基础行/次要值/按钮样式
+ * 强制包裹在 :where(.settings-page) 低特异性容器内 (0,1,0)，确保各卡 scoped 覆写始终精确胜出。
+ */
+
+:where(.settings-page) .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+:where(.settings-page) .cur {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+:where(.settings-page) .btn {
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge-2);
+  color: var(--on-glass);
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  text-shadow: var(--on-glass-shadow);
+}
+
+:where(.settings-page) .btn:disabled {
+  opacity: 0.55;
+}
+
+:where(.settings-page) .btn:active {
+  filter: brightness(1.25);
+}

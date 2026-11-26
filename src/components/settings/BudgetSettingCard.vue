@@ -4,7 +4,7 @@
  */
 import { ref } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
-import { toFen } from '@/utils/format'
+import { fmtFen, toFen } from '@/utils/format'
 
 const emit = defineEmits(['message'])
 
@@ -24,7 +24,7 @@ async function saveBudget() {
     <div class="row">
       <span>月度总预算</span>
       <span class="cur">{{
-        settings.monthlyBudget ? '¥' + (settings.monthlyBudget / 100).toFixed(2) : '未设置'
+        settings.monthlyBudget ? fmtFen(settings.monthlyBudget) : '未设置'
       }}</span>
     </div>
     <div class="row">
@@ -41,44 +41,15 @@ async function saveBudget() {
 </template>
 
 <style scoped>
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 6px 0;
-  font-size: 14px;
-}
-
-.cur {
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
 .input {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--glass-edge-2);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--glass-well);
   color: var(--text);
   font-size: 14px;
   padding: 8px 10px;
   outline: none;
-}
-
-.btn {
-  background: var(--glass-fill);
-  border: 1px solid var(--glass-edge-2);
-  color: var(--on-glass);
-  font-size: 13px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  white-space: nowrap;
-  text-shadow: var(--on-glass-shadow);
-}
-
-.btn:active {
-  filter: brightness(1.25);
 }
 </style>

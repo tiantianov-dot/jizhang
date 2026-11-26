@@ -5,7 +5,7 @@
  * 文件选择输入框采用懒挂载（选完即卸载），保证页面默认只有一个常驻导入文件框。
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { useBackgroundStore } from '@/stores/background'
+import { currentView, useBackgroundStore } from '@/stores/background'
 import { coverRequirement } from '@/services/background'
 import { drawStarfield } from '@/services/starfield'
 
@@ -53,14 +53,7 @@ const bgDims = computed(() => {
   return `当前素材 ${d.width}×${d.height} 物理像素`
 })
 
-const bgRequirement = coverRequirement({
-  innerWidth: window.innerWidth,
-  innerHeight: window.innerHeight,
-  dpr: window.devicePixelRatio,
-  screenW: window.screen && window.screen.width,
-  screenH: window.screen && window.screen.height,
-  coarse: typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches,
-})
+const bgRequirement = coverRequirement(currentView())
 
 async function startPick() {
   pickerOpen.value = true
@@ -147,27 +140,13 @@ async function removeBg() {
 </template>
 
 <style scoped>
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 6px 0;
-  font-size: 14px;
-}
-
-.cur {
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
 /* 背景预览卡：零 backdrop-filter、非 fixed */
 .bg-preview {
   height: 84px;
   margin: 6px 0 10px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   overflow: hidden;
-  background: #05070d;
+  background: var(--bg-canvas);
 }
 
 .bg-preview-media {
@@ -182,20 +161,5 @@ async function removeBg() {
   color: var(--warning);
   font-size: 13px;
   line-height: 1.7;
-}
-
-.btn {
-  background: var(--glass-fill);
-  border: 1px solid var(--glass-edge-2);
-  color: var(--on-glass);
-  font-size: 13px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  white-space: nowrap;
-  text-shadow: var(--on-glass-shadow);
-}
-
-.btn:active {
-  filter: brightness(1.25);
 }
 </style>

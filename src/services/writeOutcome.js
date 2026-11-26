@@ -95,3 +95,19 @@ export function describeUndoFailure(error) {
 export function describeDeleteFailure(error) {
   return DELETE_MESSAGES[classifyWriteError(error)]
 }
+
+/**
+ * 分类/表单等场景统一错误文案：
+ * DOMException 等非普通 Error 视为存储错误，经 classifyWriteError 映射到 failed/unknown；
+ * 普通 Error 视为 repository 的业务拒绝（内置保护/分类不存在等），直接透传原 message。
+ *
+ * @param {unknown} error
+ * @param {{ failed: string, unknown: string }} [messages]
+ * @returns {string}
+ */
+export function describeStoreError(error, messages = WRITE_MESSAGES) {
+  if (error && typeof error.name === 'string' && error.name !== 'Error') {
+    return messages[classifyWriteError(error)]
+  }
+  return error?.message || '操作失败'
+}

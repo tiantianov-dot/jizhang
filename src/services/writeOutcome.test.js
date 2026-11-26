@@ -4,6 +4,7 @@ import {
   classifyWriteError,
   DELETE_MESSAGES,
   describeDeleteFailure,
+  describeStoreError,
   describeUndoFailure,
   describeWriteFailure,
   tagWriteError,
@@ -70,4 +71,33 @@ test('用户文案固定且不包含金额/备注等业务内容', () => {
     assert.ok(!message.includes('备注'))
     assert.ok(!message.includes('金额'))
   }
+})
+
+test('describeStoreError 区分存储异常与业务拒绝并透传文案', () => {
+  assert.equal(describeStoreError(namedError('AbortError'), WRITE_MESSAGES), WRITE_MESSAGES.failed)
+  assert.equal(
+    describeStoreError(namedError('QuotaExceededError'), DELETE_MESSAGES),
+    DELETE_MESSAGES.failed,
+  )
+  assert.equal(
+    describeStoreError(namedError('UnknownError'), WRITE_MESSAGES),
+    WRITE_MESSAGES.unknown,
+  )
+  assert.equal(
+    describeStoreError(namedError('UnknownError'), DELETE_MESSAGES),
+    DELETE_MESSAGES.unknown,
+  )
+  assert.equal(
+    describeStoreError(tagWriteError(namedError('UnknownError'), 'failed'), WRITE_MESSAGES),
+    WRITE_MESSAGES.failed,
+  )
+  assert.equal(describeStoreError(namedError('AbortError')), WRITE_MESSAGES.failed)
+  assert.equal(
+    describeStoreError(new Error('内置分类受保护，不能删除'), DELETE_MESSAGES),
+    '内置分类受保护，不能删除',
+  )
+  assert.equal(describeStoreError(new Error('分类不存在'), WRITE_MESSAGES), '分类不存在')
+  assert.equal(describeStoreError(new Error(''), WRITE_MESSAGES), '操作失败')
+  assert.equal(describeStoreError(null, WRITE_MESSAGES), '操作失败')
+  assert.equal(describeStoreError(undefined, DELETE_MESSAGES), '操作失败')
 })

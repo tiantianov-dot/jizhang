@@ -9,6 +9,7 @@ import { computed } from 'vue'
 import { useRecordsStore } from '@/stores/records'
 import { useSettingsStore } from '@/stores/settings'
 import { backupAgeDays, getBackupStatus, shouldShowBackupReminder } from '@/services/backupStatus'
+import { formatBackupReminderText } from '@/services/backupFormat'
 
 const records = useRecordsStore()
 const settings = useSettingsStore()
@@ -31,11 +32,12 @@ const visible = computed(() =>
 
 const age = computed(() => backupAgeDays(settings.lastBackupAt))
 
-const text = computed(() => {
-  if (status.value === 'never') return '尚未备份，清缓存或换设备会丢账'
-  if (status.value === 'stale') return `已 ${age.value} 天未备份`
-  return '上次备份时间无法识别，建议重新导出'
-})
+const text = computed(() =>
+  formatBackupReminderText({
+    status: status.value,
+    ageDays: age.value,
+  }),
+)
 </script>
 
 <template>
@@ -54,7 +56,7 @@ const text = computed(() => {
   min-height: 36px;
   padding: 8px 12px;
   border: 1px solid var(--glass-edge-2);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--glass-well);
   color: var(--text-secondary);
   font-size: 12px;

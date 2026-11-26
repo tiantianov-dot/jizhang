@@ -7,6 +7,7 @@
   --glass-intensity: 1;
   --glass-alpha: 0.03;
 
+  --glass-radius-chip: 14px;
   --glass-radius-key: 18px;
   --glass-radius-panel: 24px;
   --glass-radius-pill: 999px;
@@ -18,33 +19,30 @@
   --glass-edge-3: rgba(255, 255, 255, 0.38);
 
   --glass-highlight:
-    linear-gradient(180deg, rgba(205, 240, 255, 0.22) 0, rgba(205, 240, 255, 0.04) 1.5px, transparent 5px),
+    linear-gradient(
+      180deg,
+      rgba(205, 240, 255, 0.22) 0,
+      rgba(205, 240, 255, 0.04) 1.5px,
+      transparent 5px
+    ),
     linear-gradient(0deg, transparent 0, rgba(175, 232, 255, 0.3) 1.5px, transparent 4px),
     linear-gradient(0deg, rgba(4, 12, 20, 0.06), transparent 20%);
 
   --glass-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.32),
-    0 8px 18px -8px rgba(0, 0, 0, 0.52),
-    0 22px 38px -24px rgba(0, 0, 0, 0.55),
-    0 0 0 0.5px rgba(255, 255, 255, 0.08),
-    inset 0 1px 1px rgba(205, 240, 255, 0.2),
-    inset 0 -5px 9px rgba(0, 0, 0, 0.3),
+    0 1px 1px rgba(0, 0, 0, 0.32), 0 8px 18px -8px rgba(0, 0, 0, 0.52),
+    0 22px 38px -24px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    inset 0 1px 1px rgba(205, 240, 255, 0.2), inset 0 -5px 9px rgba(0, 0, 0, 0.3),
     inset 0 0 0 1px rgba(4, 8, 14, 0.1);
 
   --glass-lift-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.32),
-    0 6px 14px -7px rgba(0, 0, 0, 0.5),
-    0 16px 26px -18px rgba(0, 0, 0, 0.5),
-    0 0 0 0.5px rgba(255, 255, 255, 0.08),
-    inset 0 1px 1px rgba(205, 240, 255, 0.22),
-    inset 0 -5px 8px rgba(0, 0, 0, 0.28),
+    0 1px 1px rgba(0, 0, 0, 0.32), 0 6px 14px -7px rgba(0, 0, 0, 0.5),
+    0 16px 26px -18px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    inset 0 1px 1px rgba(205, 240, 255, 0.22), inset 0 -5px 8px rgba(0, 0, 0, 0.28),
     inset 0 0 0 1px rgba(4, 8, 14, 0.1);
 
   --glass-press-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 0 0 0.5px rgba(255, 255, 255, 0.08),
-    inset 0 2px 6px rgba(160, 215, 240, 0.22),
-    inset 0 -4px 7px rgba(0, 0, 0, 0.28),
+    0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    inset 0 2px 6px rgba(160, 215, 240, 0.22), inset 0 -4px 7px rgba(0, 0, 0, 0.28),
     inset 0 0 0 1px rgba(4, 8, 14, 0.08);
 
   --on-glass-shadow: 0 1px 1px rgba(0, 0, 0, 0.86), 0 4px 14px rgba(0, 0, 0, 0.62);
@@ -52,6 +50,7 @@
   --glass-fill: rgba(255, 255, 255, var(--glass-alpha));
   --glass-well: rgba(0, 0, 0, 0.18);
   --glass-active-fill: rgba(196, 232, 250, 0.15);
+  --glass-key-active-fill: rgba(200, 235, 255, calc(var(--glass-alpha) + 0.06));
   --glass-filter: blur(calc(7px * var(--glass-intensity)))
     saturate(calc(1.08 + 0.3 * var(--glass-intensity)))
     contrast(calc(1.02 + 0.05 * var(--glass-intensity)));
@@ -65,33 +64,30 @@ html[data-polarity='light'] {
   --glass-edge-3: rgba(255, 255, 255, 0.72);
 
   --glass-highlight:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0, rgba(255, 255, 255, 0.06) 1.5px, transparent 5px),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.3) 0,
+      rgba(255, 255, 255, 0.06) 1.5px,
+      transparent 5px
+    ),
     linear-gradient(0deg, transparent 0, rgba(150, 220, 245, 0.26) 1.5px, transparent 4px),
     linear-gradient(0deg, rgba(10, 20, 30, 0.04), transparent 20%);
 
   --glass-shadow:
-    0 1px 1px rgba(18, 26, 38, 0.12),
-    0 8px 18px -8px rgba(18, 26, 38, 0.26),
-    0 22px 38px -24px rgba(18, 26, 38, 0.28),
-    0 0 0 0.5px rgba(10, 12, 14, 0.1),
-    inset 0 1px 1px rgba(255, 255, 255, 0.4),
-    inset 0 -5px 9px rgba(10, 16, 22, 0.14),
+    0 1px 1px rgba(18, 26, 38, 0.12), 0 8px 18px -8px rgba(18, 26, 38, 0.26),
+    0 22px 38px -24px rgba(18, 26, 38, 0.28), 0 0 0 0.5px rgba(10, 12, 14, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.4), inset 0 -5px 9px rgba(10, 16, 22, 0.14),
     inset 0 0 0 1px rgba(10, 14, 18, 0.05);
 
   --glass-lift-shadow:
-    0 1px 1px rgba(18, 26, 38, 0.12),
-    0 6px 14px -7px rgba(18, 26, 38, 0.24),
-    0 16px 26px -18px rgba(18, 26, 38, 0.22),
-    0 0 0 0.5px rgba(10, 12, 14, 0.1),
-    inset 0 1px 1px rgba(255, 255, 255, 0.42),
-    inset 0 -5px 8px rgba(10, 16, 22, 0.14),
+    0 1px 1px rgba(18, 26, 38, 0.12), 0 6px 14px -7px rgba(18, 26, 38, 0.24),
+    0 16px 26px -18px rgba(18, 26, 38, 0.22), 0 0 0 0.5px rgba(10, 12, 14, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.42), inset 0 -5px 8px rgba(10, 16, 22, 0.14),
     inset 0 0 0 1px rgba(10, 14, 18, 0.05);
 
   --glass-press-shadow:
-    0 1px 2px rgba(18, 26, 38, 0.1),
-    0 0 0 0.5px rgba(10, 12, 14, 0.1),
-    inset 0 2px 6px rgba(255, 255, 255, 0.55),
-    inset 0 -4px 7px rgba(10, 16, 22, 0.1),
+    0 1px 2px rgba(18, 26, 38, 0.1), 0 0 0 0.5px rgba(10, 12, 14, 0.1),
+    inset 0 2px 6px rgba(255, 255, 255, 0.55), inset 0 -4px 7px rgba(10, 16, 22, 0.1),
     inset 0 0 0 1px rgba(10, 14, 18, 0.04);
 
   --on-glass-shadow: 0 1px 0 rgba(255, 255, 255, 0.82), 0 4px 14px rgba(255, 255, 255, 0.48);
@@ -100,8 +96,8 @@ html[data-polarity='light'] {
 }
 
 html[data-glass='on'] {
-  --bg: #05070d;
-  --surface: #05070d;
+  --bg: var(--bg-canvas);
+  --surface: var(--bg-canvas);
   --text: var(--on-glass);
   --text-secondary: var(--on-glass-2);
   --border: var(--glass-edge-2);
@@ -111,7 +107,7 @@ html[data-glass='on'] {
   --warning: #ffb547;
   --brand: #9aa3ad;
   --brand-strong: #c2c9d2;
-  background-color: #05070d;
+  background-color: var(--bg-canvas);
 }
 
 html[data-glass='on'][data-polarity='light'] {
@@ -131,8 +127,8 @@ html[data-glass='on'] body::before {
   content: '';
   position: fixed;
   inset: 0;
-  z-index: -5;
-  background-color: #05070d;
+  z-index: var(--z-bg-base);
+  background-color: var(--bg-canvas);
   background-image: var(--bg-image, none);
   background-size: cover;
   background-position: center;
@@ -177,9 +173,13 @@ html[data-glass='on'] body::before {
     rgba(150, 215, 245, 0.3) 84%,
     rgba(205, 242, 255, 0.42)
   );
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
   mask-composite: exclude;
   opacity: 0.9;
   pointer-events: none;
@@ -211,7 +211,12 @@ html[data-glass='on'] body::before {
   height: 18px;
   margin: -9px 0 0 -9px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(210, 245, 255, 0.55), rgba(140, 210, 240, 0.14) 52%, transparent 72%);
+  background: radial-gradient(
+    circle,
+    rgba(210, 245, 255, 0.55),
+    rgba(140, 210, 240, 0.14) 52%,
+    transparent 72%
+  );
   animation: glass-ripple 0.62s cubic-bezier(0.16, 0.84, 0.3, 1) forwards;
   pointer-events: none;
 }
@@ -237,13 +242,13 @@ html[data-glass='on'] body::before {
 /* 全局 toast：短提示 nowrap；.bg-notice 允许换行且压过撤销 toast */
 :where(html[data-glass='on']) .toast {
   position: fixed;
-  z-index: 20;
+  z-index: var(--z-toast);
   left: 50%;
   bottom: calc(84px + env(safe-area-inset-bottom));
   transform: translateX(-50%) translateY(-4px);
   max-width: 82%;
   padding: 10px 16px;
-  border-radius: 999px;
+  border-radius: var(--glass-radius-pill);
   background: rgba(20, 20, 19, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.14);
   color: #f1efe8;
@@ -253,19 +258,21 @@ html[data-glass='on'] body::before {
   opacity: 1;
   pointer-events: auto;
   cursor: pointer;
-  transition: opacity 0.18s ease, transform 0.18s ease;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
   white-space: nowrap;
 }
 
 :where(html[data-glass='on']) .toast.bg-notice {
-  z-index: 30;
+  z-index: var(--z-notice);
   white-space: normal;
   text-align: center;
   line-height: 1.5;
 }
 
 :where(html[data-glass='on']) .mask {
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--mask-bg);
 }
 
 /* ---------- 真机降级钩子：只允许人工设置属性，应用代码不得写入 ---------- */

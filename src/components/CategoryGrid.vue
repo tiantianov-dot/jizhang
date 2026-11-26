@@ -27,7 +27,7 @@ const missing = computed(
 <template>
   <div class="cats">
     <GlassPanel v-if="missing" tag="span" shape="chip" class="cat on missing">
-      <i class="dot" style="--dot: #aaa" />
+      <i class="dot" />
       <span class="name">未分类</span>
     </GlassPanel>
     <GlassPanel
@@ -66,7 +66,7 @@ const missing = computed(
   align-items: center;
   gap: 6px;
   padding: 8px 11px;
-  border-radius: 14px;
+  border-radius: var(--glass-radius-chip);
   color: var(--on-glass-2);
   font-size: 12px;
   text-shadow: var(--on-glass-shadow);

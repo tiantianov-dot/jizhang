@@ -65,7 +65,7 @@ onBeforeUnmount(() => {
 .starfield {
   position: fixed;
   inset: 0;
-  z-index: -2;
+  z-index: var(--z-bg-starfield);
   overflow: hidden;
   pointer-events: none;
 }

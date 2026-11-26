@@ -106,20 +106,6 @@ async function commitFill() {
 </template>
 
 <style scoped>
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 6px 0;
-  font-size: 14px;
-}
-
-.cur {
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
 .preview {
   position: relative;
   height: 84px;
@@ -143,7 +129,7 @@ async function commitFill() {
   right: 14px;
   top: 18px;
   bottom: 18px;
-  border-radius: 999px;
+  border-radius: var(--glass-radius-pill);
 }
 
 .preview-inner {

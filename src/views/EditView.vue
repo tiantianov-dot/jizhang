@@ -2,7 +2,7 @@
 /**
  * EditView.vue — 编辑 / 删除单笔账目（路由 /record/:id）
  *
- * 独立页面：只复用 AmountPad 与 CategoryGrid 两个组件，不复用 AddView 整页。
+ * 独立页面：复用共用输入区块组件，不复用 AddView 整页。
  * 保存语义：整行覆盖写回（update 由 repository 刷新 updatedAt）；
  * 删除语义：软删除（deleted 标记），撤销入口交给流水页。
  */
@@ -10,7 +10,9 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCategoriesStore } from '@/stores/categories'
 import { useRecordsStore } from '@/stores/records'
-import { toFen, fenToYuan, fenToInput, todayStr } from '@/utils/format'
+import { useToast } from '@/composables/useToast'
+import { useTwoStepConfirm } from '@/composables/useTwoStepConfirm'
+import { fenToInput, formatAmountBuffer, formatRecordSubline, toFen } from '@/utils/format'
 import {
   describeDeleteFailure,
   describeWriteFailure,
@@ -19,7 +21,9 @@ import {
 } from '@/services/writeOutcome'
 import AmountPad from '@/components/AmountPad.vue'
 import CategoryGrid from '@/components/CategoryGrid.vue'
-import GlassPanel from '@/components/GlassPanel.vue'
+import PageTopbar from '@/components/PageTopbar.vue'
+import RecordAmountHeader from '@/components/RecordAmountHeader.vue'
+import RecordMetaBar from '@/components/RecordMetaBar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -37,39 +41,14 @@ const date = ref('')
 const isPrivate = ref(false)
 const saving = ref(false)
 const deleting = ref(false)
-const confirming = ref(false) // 删除两段式确认态
-const toast = ref('')
+
+const { message: toast, show: showToast, clear: clearToast } = useToast({ duration: 4000 })
+const { confirming, trigger: triggerDelete } = useTwoStepConfirm({ timeout: 3000 })
 
 const cats = computed(() => (type.value === 'expense' ? categories.expense : categories.income))
+const display = computed(() => formatAmountBuffer(buffer.value))
+const subline = computed(() => formatRecordSubline(date.value, note.value))
 
-const display = computed(() => {
-  if (!buffer.value) return '0.00'
-  const fen = toFen(buffer.value === '.' ? '0.' : buffer.value)
-  return fenToYuan(fen)
-})
-
-/** 头卡副行：今天 / M月D日，有备注时用「 · 」连接 */
-const subline = computed(() => {
-  const day = date.value === todayStr() ? '今天' : ''
-  const [, m, d] = (date.value || '').split('-')
-  const label = day || (m && d ? `${Number(m)}月${Number(d)}日` : '')
-  const n = note.value.trim()
-  return n ? [label, n].filter(Boolean).join(' · ') : label
-})
-
-/** 分 → 金额输入缓冲串：去掉无意义的尾随 0 与小数点（35.50 → "35.5"，35.00 → "35"） */
-function toBuffer(fen) {
-  return fenToInput(fen)
-}
-
-let toastTimer = null
-function showToast(msg) {
-  toast.value = msg
-  clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => (toast.value = ''), 4000)
-}
-
-let confirmTimer = null
 let backTimer = null
 
 onMounted(async () => {
@@ -81,7 +60,7 @@ onMounted(async () => {
   }
   const r = rec.value
   type.value = r.type
-  buffer.value = toBuffer(r.amount)
+  buffer.value = fenToInput(r.amount)
   categoryId.value = r.categoryId
   note.value = r.note
   date.value = r.date
@@ -90,8 +69,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  clearTimeout(toastTimer)
-  clearTimeout(confirmTimer)
   clearTimeout(backTimer)
 })
 
@@ -141,15 +118,7 @@ async function save() {
 
 /** 删除两段式：首次点击进入确认态（3 秒后自动复原），3 秒内再点才真正删除 */
 function onDeleteClick() {
-  if (!confirming.value) {
-    confirming.value = true
-    clearTimeout(confirmTimer)
-    confirmTimer = setTimeout(() => (confirming.value = false), 3000)
-    return
-  }
-  clearTimeout(confirmTimer)
-  confirming.value = false
-  remove()
+  triggerDelete(remove)
 }
 
 async function remove() {
@@ -176,40 +145,21 @@ async function remove() {
 
 <template>
   <div v-if="ready" class="page edit">
-    <div class="topbar">
-      <button class="back" @click="router.back()">‹ 返回</button>
-      <h2 class="page-title">编辑</h2>
-    </div>
+    <PageTopbar title="编辑" @back="router.back()" />
 
     <!-- 收支切换 + 金额 -->
-    <GlassPanel shape="panel" class="head">
-      <div class="seg">
-        <button :class="{ on: type === 'expense' }" @click="switchType('expense')">支出</button>
-        <button :class="{ on: type === 'income' }" @click="switchType('income')">收入</button>
-      </div>
-      <div class="amount" :class="type"><span class="cur">¥</span>{{ display }}</div>
-      <div class="sub">{{ subline }}</div>
-    </GlassPanel>
+    <RecordAmountHeader
+      :type="type"
+      :display="display"
+      :subline="subline"
+      @switch-type="switchType"
+    />
 
     <!-- 分类：保留原分类；原分类已归档时降级显示「未分类」 -->
     <CategoryGrid v-model="categoryId" :cats="cats" />
 
-    <!-- 备注 / 日期 / 私密 -->
-    <GlassPanel shape="chip" class="meta">
-      <input v-model="note" class="note" placeholder="备注（可选）" maxlength="30" />
-      <div class="right">
-        <input v-model="date" class="date" type="date" />
-        <button
-          class="lock pill"
-          :class="{ on: isPrivate }"
-          title="本机标记：完整备份仍包含；不代表加密或密码保护"
-          aria-label="本机标记：完整备份仍包含；不代表加密或密码保护"
-          @click="isPrivate = !isPrivate"
-        >
-          {{ isPrivate ? '🔒' : '🔓' }}
-        </button>
-      </div>
-    </GlassPanel>
+    <!-- 备注 / 日期 / 本机标记 -->
+    <RecordMetaBar v-model:note="note" v-model:date="date" v-model:is-private="isPrivate" />
 
     <!-- 删除：两段式确认，不用 window.confirm -->
     <button
@@ -225,7 +175,7 @@ async function remove() {
     <AmountPad v-model:buffer="buffer" :saving="saving" @save="save" />
 
     <!-- 校验反馈 -->
-    <button v-if="toast" class="toast" @click="toast = ''">{{ toast }}</button>
+    <button v-if="toast" class="toast" @click="clearToast">{{ toast }}</button>
   </div>
 </template>
 
@@ -236,159 +186,20 @@ async function remove() {
   gap: 10px;
 }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.back {
-  font-size: 15px;
-  color: var(--text-secondary);
-  padding: 8px 0;
-}
-
-.topbar .page-title {
-  margin: 0;
-}
-
-.head {
-  border-radius: var(--glass-radius-panel);
-  padding: 13px 16px 15px;
-  margin-top: 2px;
-  overflow: visible;
-}
-
-.head .seg {
-  display: inline-flex;
-  padding: 3px;
-  border-radius: 999px;
-  background: var(--glass-well);
-}
-
-.head .seg button {
-  appearance: none;
-  -webkit-appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--on-glass-2);
-  font-size: 12px;
-  padding: 5px 14px;
-  border-radius: 999px;
-}
-
-.head .seg button.on {
-  background: var(--glass-active-fill);
-  color: var(--on-glass);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 1px 4px rgba(0, 0, 0, 0.18);
-}
-
-.head .amount {
-  margin-top: 9px;
-  font-size: 44px;
-  font-weight: 250;
-  letter-spacing: -1.6px;
-  line-height: 1.04;
-  font-variant-numeric: tabular-nums;
-}
-
-.head .amount .cur {
-  font-size: 24px;
-  opacity: 0.68;
-  margin-right: 3px;
-  letter-spacing: 0;
-}
-
-.head .amount.income {
-  color: var(--income);
-}
-
-.head .sub {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--on-glass-2);
-}
-
-.meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  color: var(--on-glass-2);
-  font-size: 12px;
-  text-shadow: var(--on-glass-shadow);
-  box-shadow: var(--glass-lift-shadow);
-}
-
-.meta .right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
-
-.meta .pill {
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--glass-well);
-  color: var(--on-glass-2);
-  font-size: 12px;
-  line-height: 1.2;
-}
-
-.meta .note {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--on-glass);
-  font-size: 14px;
-  padding: 2px 0;
-}
-
-.meta .date {
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--on-glass-2);
-  font-size: 12px;
-  width: 7.8em;
-  flex: none;
-}
-
-.meta .pill.on {
-  background: var(--glass-active-fill);
-  color: var(--on-glass);
-}
-
-.meta .lock {
-  font-size: 17px;
-  opacity: 0.55;
-}
-
-.meta .lock.on {
-  opacity: 1;
-}
-
 /* danger 语义靠红色底/描边承载，文字用纯白保证深底可读 */
 .del {
   padding: 12px 0;
-  border-radius: 10px;
-  border: 1px solid rgba(163, 45, 45, 0.55);
-  background: rgba(163, 45, 45, 0.22);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--danger-soft-border);
+  background: var(--danger-soft-bg);
   color: #fff;
   font-size: 15px;
 }
 
 .del.warn {
   /* 填充态不能跟 --danger 走亮红：白字在 #ff6b6b 上不足 4.5:1 */
-  background: #c0392b;
-  border-color: #c0392b;
+  background: var(--danger-solid);
+  border-color: var(--danger-solid);
   color: #fff;
   font-weight: 600;
 }

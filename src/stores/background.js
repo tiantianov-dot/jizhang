@@ -15,7 +15,7 @@ function setBgImage(value) {
 }
 
 /** 纯函数门所需的视口快照；services 保持零 DOM */
-function currentView() {
+export function currentView() {
   return {
     innerWidth: window.innerWidth,
     innerHeight: window.innerHeight,
@@ -23,8 +23,7 @@ function currentView() {
     screenW: window.screen && window.screen.width,
     screenH: window.screen && window.screen.height,
     coarse:
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(pointer: coarse)').matches,
+      typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches,
   }
 }
 

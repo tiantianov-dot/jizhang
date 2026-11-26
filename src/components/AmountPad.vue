@@ -7,6 +7,7 @@
  * 13 个键各自是一块独立玻璃：12 个数字键后接 ✓（第 4 列第 2–4 行）。
  */
 import GlassPanel from './GlassPanel.vue'
+import { applyAmountKey } from '@/utils/format'
 
 const props = defineProps({
   /** 金额输入缓冲（v-model:buffer） */
@@ -20,21 +21,8 @@ const emit = defineEmits(['update:buffer', 'save'])
 const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back']
 
 function press(key) {
-  const cur = props.buffer
-  if (key === 'back') {
-    emit('update:buffer', cur.slice(0, -1))
-    return
-  }
-  if (key === '.') {
-    if (!cur) emit('update:buffer', '0.')
-    else if (!cur.includes('.')) emit('update:buffer', `${cur}.`)
-    return
-  }
-  // 数字键：限制整数位 7 位、小数 2 位
-  const [int, dec] = cur.split('.')
-  if (dec !== undefined && dec.length >= 2) return
-  if (int && int.length >= 7) return
-  emit('update:buffer', cur + key)
+  const next = applyAmountKey(props.buffer, key)
+  if (next !== props.buffer) emit('update:buffer', next)
 }
 </script>
 
@@ -103,7 +91,7 @@ function press(key) {
 }
 
 .pad .key:active {
-  background-color: rgba(200, 235, 255, calc(var(--glass-alpha) + 0.06));
+  background-color: var(--glass-key-active-fill);
   box-shadow: var(--glass-press-shadow);
 }
 

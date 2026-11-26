@@ -5,11 +5,13 @@
  * 类型只在「新增」时可选：编辑时锁定，避免跨类型改挂导致历史流水口径错乱。
  * 删除走两段式确认（首次点击变红，3 秒内再点才生效），归档还是硬删由 repository 判定。
  */
-import { computed, onUnmounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useCategoriesStore } from '@/stores/categories'
-import { fenToInput, toFen } from '@/utils/format'
+import { fenToInput } from '@/utils/format'
 import { isBuiltinCategory } from '@/services/builtinCategories'
-import { classifyWriteError, DELETE_MESSAGES, WRITE_MESSAGES } from '@/services/writeOutcome'
+import { buildCategoryPayload, validateCategoryDraft } from '@/services/categoryManagement'
+import { DELETE_MESSAGES, describeStoreError, WRITE_MESSAGES } from '@/services/writeOutcome'
+import { useTwoStepConfirm } from '@/composables/useTwoStepConfirm'
 import IconColorPicker from '@/components/IconColorPicker.vue'
 
 const props = defineProps({
@@ -20,7 +22,6 @@ const props = defineProps({
 const emit = defineEmits(['done', 'cancel', 'notice'])
 
 const categories = useCategoriesStore()
-
 const isEdit = computed(() => !!props.cat)
 const builtin = computed(() => isBuiltinCategory(props.cat))
 
@@ -34,51 +35,28 @@ const form = reactive({
 })
 
 const busy = ref(false)
-const confirming = ref(false)
-let confirmTimer = null
-
-/**
- * DOMException 是存储错误，走 failed/unknown 文案；
- * 普通 Error 是 repository 的业务拒绝（内置保护/分类不存在），保留原 message。
- */
-function messageFor(err, messages) {
-  if (err && typeof err.name === 'string' && err.name !== 'Error') {
-    return messages[classifyWriteError(err)]
-  }
-  return err?.message || '操作失败'
-}
-
-onUnmounted(() => clearTimeout(confirmTimer))
+const {
+  confirming,
+  trigger: triggerDelete,
+  reset: resetDeleteConfirm,
+} = useTwoStepConfirm({ timeout: 3000 })
 
 async function submit() {
   if (busy.value) return
-  const name = form.name.trim()
+  resetDeleteConfirm()
+  const checked = validateCategoryDraft(form)
   // 校验失败只提示、不收表单（notice 与 done 的区别：done 会让父级收起表单）
-  if (!name) {
-    emit('notice', '先填分类名称')
-    return
-  }
-  if (name.length > 6) {
-    emit('notice', '名称不超过 6 个字')
+  if (!checked.ok) {
+    emit('notice', checked.message)
     return
   }
   busy.value = true
   try {
-    // 编辑时以原分类为底（props.cat 为 null 时展开为空对象 = 新增），
-    // 只覆盖用户能改的字段，id / order / lastUsedAt / archived 原样保留。
-    await categories.save({
-      ...props.cat,
-      name,
-      type: form.type,
-      emoji: form.emoji.trim() || '📦',
-      color: form.color || '#5F5E5A',
-      // 空 / 非数字 / 负数一律存 0（= 不设），避免 NaN 落库
-      monthlyBudget: Math.max(0, toFen(form.budget) || 0),
-    })
+    await categories.save(buildCategoryPayload(props.cat, { ...form, name: checked.name }))
     emit('done', isEdit.value ? '已保存' : '已新增')
   } catch (err) {
     // 只提示、不收表单，用户可修正后重试
-    emit('notice', messageFor(err, WRITE_MESSAGES))
+    emit('notice', describeStoreError(err, WRITE_MESSAGES))
   } finally {
     busy.value = false
   }
@@ -86,15 +64,7 @@ async function submit() {
 
 /** 删除两段式：首次点击进入确认态（3 秒后自动复原），3 秒内再点才真正删除 */
 function onDeleteClick() {
-  if (!confirming.value) {
-    confirming.value = true
-    clearTimeout(confirmTimer)
-    confirmTimer = setTimeout(() => (confirming.value = false), 3000)
-    return
-  }
-  clearTimeout(confirmTimer)
-  confirming.value = false
-  remove()
+  triggerDelete(remove)
 }
 
 async function remove() {
@@ -109,7 +79,7 @@ async function remove() {
         : '已删除',
     )
   } catch (err) {
-    emit('notice', messageFor(err, DELETE_MESSAGES))
+    emit('notice', describeStoreError(err, DELETE_MESSAGES))
   } finally {
     busy.value = false
   }
@@ -202,13 +172,13 @@ async function remove() {
 .seg {
   display: flex;
   background: var(--glass-well);
-  border-radius: 999px;
+  border-radius: var(--glass-radius-pill);
   padding: 3px;
 }
 
 .seg button {
   padding: 4px 16px;
-  border-radius: 999px;
+  border-radius: var(--glass-radius-pill);
   font-size: 13px;
   color: var(--text-secondary);
 }
@@ -223,7 +193,7 @@ async function remove() {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--glass-edge-2);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--glass-well);
   color: var(--text);
   font-size: 14px;
@@ -243,7 +213,7 @@ async function remove() {
   color: var(--on-glass);
   font-size: 14px;
   padding: 10px 0;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   text-shadow: var(--on-glass-shadow);
 }
 
@@ -263,9 +233,9 @@ async function remove() {
 
 .del {
   padding: 10px 0;
-  border-radius: 10px;
-  border: 1px solid rgba(163, 45, 45, 0.55);
-  background: rgba(163, 45, 45, 0.22);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--danger-soft-border);
+  background: var(--danger-soft-bg);
   color: #fff;
   font-size: 14px;
 }
@@ -279,8 +249,8 @@ async function remove() {
 
 .del.warn {
   /* 填充态不能跟 --danger 走亮红：白字在 #ff6b6b 上不足 4.5:1 */
-  background: #c0392b;
-  border-color: #c0392b;
+  background: var(--danger-solid);
+  border-color: var(--danger-solid);
   color: #fff;
   font-weight: 600;
 }

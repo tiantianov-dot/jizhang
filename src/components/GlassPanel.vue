@@ -6,7 +6,11 @@
  * 材质由 glass.css 的 :is(.gp, .card) 提供，这里只负责 shape 圆角与 blur 开关。
  */
 defineProps({
-  shape: { type: String, default: 'panel' },
+  shape: {
+    type: String,
+    default: 'panel',
+    validator: (v) => ['panel', 'key', 'chip', 'pill'].includes(v),
+  },
   tag: { type: String, default: 'div' },
   blur: { type: Boolean, default: true },
 })
@@ -28,7 +32,7 @@ defineProps({
 }
 
 .gp-chip {
-  border-radius: 14px;
+  border-radius: var(--glass-radius-chip);
 }
 
 .gp-pill {

@@ -3,6 +3,7 @@
  * SettingsView.vue — 设置页外壳（负责区块组装与底部唯一反馈消息栏）
  */
 import { ref } from 'vue'
+import '@/styles/settings-shared.css'
 import BudgetSettingCard from '@/components/settings/BudgetSettingCard.vue'
 import AppearanceSettingCard from '@/components/settings/AppearanceSettingCard.vue'
 import BackgroundSettingCard from '@/components/settings/BackgroundSettingCard.vue'
@@ -16,7 +17,7 @@ function setMsg(text) {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page settings-page">
     <h2 class="page-title">设置</h2>
 
     <BudgetSettingCard class="block" @message="setMsg" />

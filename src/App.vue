@@ -57,11 +57,7 @@ onMounted(async () => {
     <BackgroundLayer />
     <RouterView />
     <TabBar />
-    <button
-      v-if="background.notice"
-      class="toast bg-notice"
-      @click="background.notice = ''"
-    >
+    <button v-if="background.notice" class="toast bg-notice" @click="background.notice = ''">
       {{ background.notice }}
     </button>
   </template>
@@ -78,9 +74,5 @@ onMounted(async () => {
   font-size: 15px;
   font-weight: 600;
   margin: 0 0 8px;
-}
-
-.bg-notice {
-  z-index: 30;
 }
 </style>

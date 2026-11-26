@@ -74,11 +74,11 @@ const tabs = [
 <style scoped>
 .tabbar {
   position: fixed;
-  z-index: 10;
+  z-index: var(--z-tabbar);
   left: 12px;
   right: 12px;
-  bottom: calc(10px + env(safe-area-inset-bottom));
-  height: 58px;
+  bottom: calc(var(--tabbar-gap) + env(safe-area-inset-bottom));
+  height: var(--tabbar-h);
   max-width: 496px;
   margin: 0 auto;
   display: flex;
@@ -103,7 +103,7 @@ const tabs = [
   min-width: 0;
   padding: 3px 2px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--glass-radius-pill);
   background: transparent;
   color: var(--on-glass-2);
   font-size: 10px;

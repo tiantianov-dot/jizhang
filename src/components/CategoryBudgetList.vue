@@ -83,7 +83,7 @@ defineProps({
 .bar {
   display: block;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--glass-radius-pill);
   background: var(--glass-well);
   overflow: hidden;
 }
@@ -91,7 +91,7 @@ defineProps({
 .fill {
   display: block;
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--glass-radius-pill);
   background: var(--brand);
 }
 

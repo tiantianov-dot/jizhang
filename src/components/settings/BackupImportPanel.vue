@@ -2,26 +2,16 @@
 /**
  * BackupImportPanel.vue — 数据导入与只读预览确认模块
  *
- * 负责读取备份 JSON、调用 repositories/backup.previewImport 展示只读预览、
- * 用户确认后执行原子导入并重新加载四个 store。
+ * 保留设置页唯一常驻隐藏 input[type=file]；预览、原子导入与 4 个业务 store 重载均委托 stores/backup。
  */
-import { ref } from 'vue'
-import { useRecordsStore } from '@/stores/records'
-import { useCategoriesStore } from '@/stores/categories'
-import { useSettingsStore } from '@/stores/settings'
-import { useAppearanceStore } from '@/stores/appearance'
-import * as backup from '@/repositories/backup'
+import { onUnmounted, ref } from 'vue'
+import { useBackupStore } from '@/stores/backup'
+import { describeImportErrors, formatImportSummary } from '@/services/backupFormat'
 
 const emit = defineEmits(['message', 'imported'])
 
-const records = useRecordsStore()
-const categories = useCategoriesStore()
-const settings = useSettingsStore()
-const appearance = useAppearanceStore()
-
+const backup = useBackupStore()
 const fileInput = ref(null)
-const pendingImport = ref(null)
-const importBusy = ref(false)
 
 function openPicker() {
   fileInput.value?.click()
@@ -29,119 +19,89 @@ function openPicker() {
 
 defineExpose({ openPicker })
 
-function describeImportErrors(errors) {
-  const messages = errors.slice(0, 3).map((item) => item.message)
-  const suffix = errors.length > 3 ? `（共 ${errors.length} 项）` : ''
-  return `${messages.join('；')}${suffix}`
-}
-
-function importSummaryText(summary) {
-  const r = summary.records
-  const c = summary.categories
-  const s = summary.settings
-  return [
-    `账目 新增 ${r.added} · 更新 ${r.updated} · 跳过 ${r.skipped}`,
-    `分类 新增 ${c.added} · 匹配 ${c.matched} · 更新 ${c.updated} · 跳过 ${c.skipped} · 冲突 ${c.conflicts}`,
-    `设置 更新 ${s.updated} · 跳过 ${s.skipped}`,
-  ].join('；')
-}
+onUnmounted(() => {
+  backup.cancelImport()
+})
 
 async function doImport(e) {
   const file = e.target.files && e.target.files[0]
   if (!file) return
   try {
     const payload = JSON.parse(await file.text())
-    const preview = await backup.previewImport(payload)
-    if (preview.errors.length) {
-      emit('message', `导入失败：${describeImportErrors(preview.errors)}`)
-      pendingImport.value = null
+    const result = await backup.previewImport(payload)
+    if (!result.ok) {
+      emit('message', `导入失败：${describeImportErrors(result.errors)}`)
       return
     }
-    pendingImport.value = { payload, summary: preview.summary }
     emit('message', '')
   } catch (err) {
+    backup.cancelImport()
     emit('message', `导入失败：${err.message}`)
-    pendingImport.value = null
   } finally {
     e.target.value = ''
   }
 }
 
 function cancelImport() {
-  if (importBusy.value) return
-  pendingImport.value = null
+  if (!backup.cancelImport()) return
   emit('message', '已取消导入')
 }
 
 async function confirmImport() {
-  if (!pendingImport.value || importBusy.value) return
-  importBusy.value = true
   try {
-    const summary = await backup.importMerge(pendingImport.value.payload)
-    await Promise.all([records.load(), categories.load(), settings.load(), appearance.load()])
-    pendingImport.value = null
-    emit('imported', `导入完成：${importSummaryText(summary)}`)
+    const summary = await backup.confirmImport()
+    if (!summary) return
+    emit('imported', `导入完成：${formatImportSummary(summary)}`)
   } catch (err) {
     emit('message', `导入失败：${err.message}`)
-  } finally {
-    importBusy.value = false
   }
 }
 </script>
 
 <template>
   <input ref="fileInput" type="file" accept="application/json,.json" hidden @change="doImport" />
-  <div v-if="pendingImport" class="import-preview" data-testid="import-preview">
+  <div v-if="backup.pendingImport" class="import-preview" data-testid="import-preview">
     <p class="preview-title">导入预览（尚未写入）</p>
     <p class="preview-line">
-      账目：新增 {{ pendingImport.summary.records.added }} · 更新
-      {{ pendingImport.summary.records.updated }} · 跳过
-      {{ pendingImport.summary.records.skipped }}
+      账目：新增 {{ backup.pendingImport.summary.records.added }} · 更新
+      {{ backup.pendingImport.summary.records.updated }} · 跳过
+      {{ backup.pendingImport.summary.records.skipped }}
     </p>
     <p class="preview-line">
-      其中软删：新增 {{ pendingImport.summary.records.softDeleted.added }} · 更新
-      {{ pendingImport.summary.records.softDeleted.updated }}（导入后仍在回收站）
+      其中软删：新增 {{ backup.pendingImport.summary.records.softDeleted.added }} · 更新
+      {{ backup.pendingImport.summary.records.softDeleted.updated }}（导入后仍在回收站）
     </p>
     <p class="preview-line">
-      分类：新增 {{ pendingImport.summary.categories.added }} · 匹配
-      {{ pendingImport.summary.categories.matched }} · 更新
-      {{ pendingImport.summary.categories.updated }} · 跳过
-      {{ pendingImport.summary.categories.skipped }} · 冲突
-      {{ pendingImport.summary.categories.conflicts }}
+      分类：新增 {{ backup.pendingImport.summary.categories.added }} · 匹配
+      {{ backup.pendingImport.summary.categories.matched }} · 更新
+      {{ backup.pendingImport.summary.categories.updated }} · 跳过
+      {{ backup.pendingImport.summary.categories.skipped }} · 冲突
+      {{ backup.pendingImport.summary.categories.conflicts }}
     </p>
     <p class="preview-line">
-      设置：更新 {{ pendingImport.summary.settings.updated }} · 跳过
-      {{ pendingImport.summary.settings.skipped }}
+      设置：更新 {{ backup.pendingImport.summary.settings.updated }} · 跳过
+      {{ backup.pendingImport.summary.settings.skipped }}
     </p>
-    <p v-if="pendingImport.summary.conflicts.length" class="preview-warn">
+    <p v-if="backup.pendingImport.summary.conflicts.length" class="preview-warn">
       有
-      {{ pendingImport.summary.conflicts.length }}
+      {{ backup.pendingImport.summary.conflicts.length }}
       个旧默认分类无法唯一匹配，将保留为自定义（不强并）。
     </p>
     <div class="row">
-      <button class="btn" :disabled="importBusy" @click="cancelImport">取消</button>
-      <button class="btn" :disabled="importBusy" @click="confirmImport">
-        {{ importBusy ? '导入中…' : '确认导入' }}
+      <button class="btn" :disabled="backup.importBusy" @click="cancelImport">取消</button>
+      <button class="btn" :disabled="backup.importBusy" @click="confirmImport">
+        {{ backup.importBusy ? '导入中…' : '确认导入' }}
       </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 6px 0;
-  font-size: 14px;
-}
-
 .import-preview {
   margin: 6px 0 10px;
   padding: 10px 12px;
   border: 1px solid var(--glass-edge-2);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--glass-well);
 }
 
@@ -163,24 +123,5 @@ async function confirmImport() {
   font-size: 12px;
   color: var(--warning);
   line-height: 1.6;
-}
-
-.btn {
-  background: var(--glass-fill);
-  border: 1px solid var(--glass-edge-2);
-  color: var(--on-glass);
-  font-size: 13px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  white-space: nowrap;
-  text-shadow: var(--on-glass-shadow);
-}
-
-.btn:disabled {
-  opacity: 0.55;
-}
-
-.btn:active {
-  filter: brightness(1.25);
 }
 </style>

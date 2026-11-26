@@ -149,3 +149,55 @@ export function dailySums(records, month) {
   }
   return out
 }
+
+/**
+ * 组装支出构成环图项：按分类解析函数补全颜色与展示标签
+ * （调用方应传入全量查询如 categories.byId，确保归档分类的历史账目仍显示原名称）。
+ * @param {{ categoryId: string, sum: number }[]} catSums
+ * @param {(id: string) => import('@/models').Category | undefined} resolveCategory
+ * @returns {{ value: number, color: string, label: string }[]}
+ */
+export function buildDonutItems(catSums, resolveCategory) {
+  return catSums.map(({ categoryId, sum }) => {
+    const c = typeof resolveCategory === 'function' ? resolveCategory(categoryId) : null
+    return {
+      value: sum,
+      color: c?.color || '#5F5E5A',
+      label: c ? `${c.emoji} ${c.name}` : '📦 未分类',
+    }
+  })
+}
+
+/**
+ * 组装每日支出柱图项：将 dailySums 返回的 { day, sum } 规整为柱图消费的 { day, value }。
+ * @param {import('@/models').RecordItem[]} records
+ * @param {string} month 形如 "2026-10"
+ * @returns {{ day: number, value: number }[]}
+ */
+export function buildDailyChartItems(records, month) {
+  return dailySums(records, month).map((d) => ({ day: d.day, value: d.sum }))
+}
+
+/**
+ * 组装分类预算进度行：筛选设了预算（monthlyBudget > 0）的支出分类，
+ * 按当月分类汇总补齐 spent（默认 0）并附加 budgetUsage 用量。
+ * @param {import('@/models').Category[]} expenseCategories 未归档支出分类
+ * @param {{ categoryId: string, sum: number }[]} catSums
+ * @returns {{ id: string, emoji: string, name: string, spent: number, budget: number, pct: number, state: 'none'|'ok'|'warn'|'over' }[]}
+ */
+export function buildCategoryBudgetRows(expenseCategories, catSums) {
+  const spentById = new Map(catSums.map(({ categoryId, sum }) => [categoryId, sum]))
+  return expenseCategories
+    .filter((c) => c.monthlyBudget > 0)
+    .map((c) => {
+      const spent = spentById.get(c.id) || 0
+      return {
+        id: c.id,
+        emoji: c.emoji,
+        name: c.name,
+        spent,
+        budget: c.monthlyBudget,
+        ...budgetUsage(spent, c.monthlyBudget),
+      }
+    })
+}

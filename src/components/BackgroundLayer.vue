@@ -8,6 +8,7 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useBackgroundStore } from '@/stores/background'
+import { playMediaSafely } from '@/utils/media'
 
 const background = useBackgroundStore()
 const videoEl = ref(null)
@@ -25,12 +26,15 @@ function onLoadedData() {
     const canvas = document.createElement('canvas')
     canvas.width = 320
     canvas.height = 180
-    canvas.getContext('2d').drawImage(el, 0, 0, 320, 180)
-    poster.value = canvas.toDataURL('image/jpeg', 0.6)
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.drawImage(el, 0, 0, 320, 180)
+      poster.value = canvas.toDataURL('image/jpeg', 0.6)
+    }
   } catch {
     // 取不到首帧就保留视频自身画面，不影响播放
   }
-  el.play().catch(() => {})
+  playMediaSafely(el)
 }
 
 watch(
@@ -66,7 +70,7 @@ onBeforeUnmount(() => background.resetVideoReady())
   width: 100%;
   height: 100%;
   object-fit: cover;
-  z-index: -4;
+  z-index: var(--z-bg-video);
   pointer-events: none;
 }
 </style>

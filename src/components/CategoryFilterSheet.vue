@@ -93,10 +93,10 @@ onUnmounted(() => {
 .mask {
   position: fixed;
   inset: 0;
-  z-index: 30; /* 高于 TabBar(10) 与撤销 toast(20) */
+  z-index: var(--z-sheet); /* 高于 TabBar(10) 与撤销 toast(20) */
   display: flex;
   align-items: flex-end;
-  background: rgba(0, 0, 0, .45);
+  background: var(--mask-bg);
 }
 
 .sheet {
@@ -143,7 +143,7 @@ onUnmounted(() => {
   gap: 3px;
   min-height: 44px; /* 触控目标 */
   padding: 8px 2px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1.5px solid transparent;
 }
 

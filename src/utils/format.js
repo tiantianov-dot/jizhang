@@ -62,3 +62,53 @@ export function daysSince(iso) {
   const toDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
   return Math.round((toDay(new Date()) - toDay(d)) / 86400000)
 }
+
+/** ISO 时间串 → 本地 YYYY-MM-DD HH:mm；空值或无法解析返回空串 */
+export function formatLocalDateTime(iso) {
+  if (!iso) return ''
+  const t = iso instanceof Date ? iso.getTime() : typeof iso === 'string' ? Date.parse(iso) : NaN
+  if (!Number.isFinite(t)) return ''
+  const d = new Date(t)
+  const p = (x) => String(x).padStart(2, '0')
+  return `${toDateStr(d)} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** 金额输入缓冲串 → 头卡展示的两位小数串（空串 / "." → "0.00"，如 "12.3" → "12.30"） */
+export function formatAmountBuffer(buffer) {
+  if (!buffer || buffer === '.') return '0.00'
+  return fenToYuan(toFen(buffer))
+}
+
+/** 头卡副行：今天 / M月D日，有非空备注时用「 · 」连接 */
+export function formatRecordSubline(date, note = '', today = todayStr()) {
+  const rawDate = typeof date === 'string' ? date : ''
+  const day = rawDate && rawDate === today ? '今天' : ''
+  const parts = rawDate.split('-')
+  const m = parts.length === 3 && parts[1] ? Number(parts[1]) : NaN
+  const d = parts.length === 3 && parts[2] ? Number(parts[2]) : NaN
+  const label =
+    day || (Number.isInteger(m) && m > 0 && Number.isInteger(d) && d > 0 ? `${m}月${d}日` : '')
+  const n = typeof note === 'string' ? note.trim() : ''
+  return n ? [label, n].filter(Boolean).join(' · ') : label
+}
+
+/**
+ * 金额键盘单次按键转移（纯函数，供 AmountPad 复用）：
+ * - 'back'：退格删除末尾字符
+ * - '.'：空串变 "0."，已有小数点则忽略
+ * - '0'–'9'：限制整数位最多 7 位、小数位最多 2 位
+ * - 其余非法键一律忽略，原样返回
+ */
+export function applyAmountKey(buffer, key) {
+  const cur = typeof buffer === 'string' ? buffer : ''
+  if (key === 'back') return cur.slice(0, -1)
+  if (key === '.') {
+    if (!cur) return '0.'
+    return cur.includes('.') ? cur : `${cur}.`
+  }
+  if (typeof key !== 'string' || !/^[0-9]$/.test(key)) return cur
+  const [int, dec] = cur.split('.')
+  if (dec !== undefined && dec.length >= 2) return cur
+  if (int && int.length >= 7) return cur
+  return cur + key
+}

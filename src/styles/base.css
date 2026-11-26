@@ -17,7 +17,26 @@
   --tabbar-h: 58px;
   --tabbar-gap: 10px;
   --page-bottom-gap: 34px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
   --radius: 12px;
+
+  --bg-canvas: #05070d;
+  --mask-bg: rgba(0, 0, 0, 0.45);
+  --danger-solid: #c0392b;
+  --danger-soft-bg: rgba(163, 45, 45, 0.22);
+  --danger-soft-border: rgba(163, 45, 45, 0.55);
+  --danger-confirm-bg: rgba(163, 45, 45, 0.14);
+  --danger-confirm-border: rgba(163, 45, 45, 0.45);
+
+  --z-bg-base: -5;
+  --z-bg-video: -4;
+  --z-bg-starfield: -2;
+  --z-bg-immersive: -1;
+  --z-tabbar: 10;
+  --z-toast: 20;
+  --z-sheet: 30;
+  --z-notice: 30;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -45,8 +64,7 @@ body {
 
 body {
   font-family:
-    -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
-    'Segoe UI', sans-serif;
+    -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
