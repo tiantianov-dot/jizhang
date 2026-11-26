@@ -37,3 +37,10 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# Agent runtime memory & gate artifacts (keep .agent/TEAM_RULES.md tracked)
+.agent/requirements.md
+.agent/state.md
+.agent/plan.md
+.agent/review.md
+.agent/release.md
