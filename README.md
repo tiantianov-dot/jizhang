@@ -2,7 +2,7 @@
 
 > 理念：**极简功能不减，唯一宗旨 = 方便快速记账**（记一笔 ≤3 次点击、≤3 秒）
 
-Local-first 记账 PWA：无后端，数据全部存在浏览器 IndexedDB；可添加到 iOS 主屏幕当 App 用；远景是双人同步（字段已预留，同步层未实现）。
+Local-first 记账 PWA：无后端，数据全部存在浏览器 IndexedDB；可添加到 iOS 主屏幕当 App 用。
 
 **给 Agent 的提示**：接手本项目请先读完本文件，再读 `src/models.js`（字段约定源头）与 `src/db/index.js`（引擎层）。完整设计决策与演进史见 `docs/DESIGN.md`。
 
@@ -35,8 +35,8 @@ npm run format     # Prettier 格式化 src/
 **OPFS 同理**——背景素材字节只有 `repositories/background.js` 能碰 `navigator.storage.getDirectory()`（见「外观与材质」）。
 
 **已知跨层直连例外**（只调用引擎/仓库 API，不直接操作 IndexedDB/OPFS）：`App.vue` → `db.initDB`；
-`CategoriesView.vue` → `repositories/records.categoryUsage`；`SettingsView.vue` → `repositories/backup`
-（导出/预览/导入）。新增代码不要扩散这种直连，能走 store 就走 store。
+`components/settings/BackupSettingCard.vue` 与 `components/settings/BackupImportPanel.vue` →
+`repositories/backup`（导出/预览/导入）。新增代码不要扩散这种直连，能走 store 就走 store。
 
 ```
 src/
@@ -46,7 +46,8 @@ src/
 ├── db/
 │   ├── index.js         # IndexedDB 引擎：打开/升级建表/事务/通用 CRUD 原语/initDB（无业务逻辑）
 │   ├── migrations.js    # 一次性本地迁移：旧随机默认分类 ID → 固定内置 ID（单事务，失败回滚重试）
-│   └── seed.js          # 首次启动种子：16 个固定内置分类 + 默认设置（seedVersion 标记，不重复复种）
+│   ├── seed.js          # 首次启动种子：16 个固定内置分类 + 默认设置（seedVersion 标记，不重复复种）
+│   └── testIsolation.js # 仅测试隔离辅助（resetDatabase / snapshot，不进入生产路径）
 ├── repositories/        # 领域仓库层：唯一允许碰数据库的业务代码
 │   ├── records.js       #   账目 CRUD、软删除、维护分类 lastUsedAt、引用计数/迁移写计划
 │   ├── categories.js    #   分类 CRUD、最近使用排序、内置保护、有引用归档、批量归档/迁移
@@ -82,22 +83,24 @@ src/
 │                        #   BackupReminder(记一笔页轻提示)；
 │                        #   AmountPad(金额键盘) 与 CategoryGrid(分类平铺) 被 Add、Edit 复用；
 │                        #   CategoryForm / IconColorPicker 供 Categories；DonutChart / BarChart / CategoryBudgetList 供 Stats
+│   └── settings/        # 设置页子组件：BudgetSettingCard / AppearanceSettingCard / BackgroundSettingCard /
+│                        #   BackupSettingCard / BackupImportPanel（供 SettingsView 组装）
 └── styles/
     ├── base.css         # 基础 Token、safe-area、底栏与页面留白
     └── glass.css        # 单一玻璃材质 Token（强度/填充/高光/边圈/阴影 + 极性 + 涟漪 + 人工降级钩子）
 index.html               # 首帧 data-glass/data-polarity/data-bg + 内联 #05070d
 public/icons/            # PWA 图标（scripts/gen_icons.py 生成）
-scripts/                 # test-alias-loader.mjs（单测 @ 别名）+ accept_*.cjs（本机 E2E 验收脚本）
+scripts/                 # test-alias-loader.mjs（单测 @ 别名）+ e2e-harness.cjs + 11 个 accept_*.cjs（本机 E2E/文案验收）+ gen_icons.py
 vite.config.js           # base './' + VitePWA(manifest + SW 离线缓存，globPatterns 仅 js/css/html)
 ```
 
 ## 核心约定（改动时必须遵守）
 
 1. **金额一律以「分」存整数**（`utils/format` 的 `toFen` / `fenToYuan` 转换），禁止浮点
-2. **删除 = 软删除**（`deleted: true`），为后期同步服务，禁止硬删 records
-3. **`private: true` 是「本机标记」**：完整本机备份仍包含；将来同步时跳过、不进入共享视图。
-   它**不代表加密、锁或密码保护**，流水页只用小字「本」提示
-4. records/categories 都有 `id` / `updatedAt` —— 是双人同步的合并依据，改字段前必读
+2. **删除 = 软删除**（`deleted: true`、`deletedAt`），支持删除撤销与备份恢复，禁止硬删 records
+3. **`private: true` 是「本机标记」**：完整本机备份仍包含，仅作本机区分标注；
+   **不代表加密、锁或密码保护**，流水页只用小字「本」提示
+4. records/categories 都有 `id` / `updatedAt` —— 是备份导入合并（LWW）的依据，改字段前必读
    `src/models.js` 与 `docs/DESIGN.md`
 5. 分类排序由 `lastUsedAt` 驱动（最近使用排前），这是"3 秒记账"的核心体验，不要改成固定排序
 6. 收支颜色遵循中式习惯：收入红、支出默认色；预算 80% 变黄、超支变红（口径在 `services/stats.budgetUsage`）
@@ -134,8 +137,8 @@ vite.config.js           # base './' + VitePWA(manifest + SW 离线缓存，glob
 - **settings 白名单 6 键**：`monthlyBudget`、`ownerName`、`uiGlassIntensity`、`uiGlassFill`、
   `backupReminderDays`、`backupReminderEnabled`。`lastBackupAt`、`seedVersion`、
   `builtinIdentityVersion`、`syncConfig` 与未知键**永不导出/导入**。
-- **导出 purpose**：UI 当前只用默认的 `backup`（完整换机快照，**保留软删除与 private**，否则恢复时
-  静默丢账）；`exportAll({ purpose: 'sync' })` 会剔除 private，为后续同步预留，尚未接入 UI。
+- **导出 purpose**：UI 当前只用默认的 `backup`（完整换机快照，**保留软删除与 `private`**，否则恢复时
+  静默丢账）；`repositories/backup.js` 内部仍保留未接入 UI 的 `purpose: 'sync'` 过滤分支。
 
 ### 批量分类管理
 
@@ -169,8 +172,8 @@ vite.config.js           # base './' + VitePWA(manifest + SW 离线缓存，glob
 
 - 完整本机备份（purpose=backup）**保留软删除与 private**；设置页披露
   「有效 / 回收站 / 本机标记 / 备份总计」，并说明列表只显示有效账目、回收站与本机标记记录仍在备份里。
-- `private` 只是**本地标记**：完整备份仍包含；将来同步时跳过；**不等于加密、锁、密码保护，也不等于
-  已同步**。流水页用小字「本」+「本机标记：完整备份仍包含；不代表加密或密码保护」提示。
+- `private` 只是**本机标记**：完整本机备份仍包含，仅作本机区分标注；**不代表加密、锁或密码保护**。
+  流水页用小字「本」+「本机标记：完整备份仍包含；不代表加密或密码保护」提示。
 
 ## 外观与材质（V5 定稿，2026-10-22）
 
@@ -225,39 +228,34 @@ hash 路由 + 相对 base，部署到 `https://<user>.github.io/<repo>/` 子路�
   仍可能把旧 `sw.js` 视为新鲜、`autoUpdate` 不触发，**短时间看到旧皮肤不是发布失败**；把标签页彻底关掉重开、
   或等十分钟再开即可（这是 GitHub Pages 的平台行为，换托管需重验）。
 
-## 当前进度
+## 现有功能
 
-- ✅ 骨架：四层分离（db 引擎 / repository / store / view）、统计与格式化纯函数化、
-  记一笔可真实入账+撤销、流水按天分组、统计月度概览+预算进度条、
-  设置（预算/导入导出）、PWA manifest+离线 SW+图标、首启种子分类
+- ✅ 骨架与主页面：四层分离（db 引擎 / repository / store / view）、统计与格式化纯函数化、
+  记一笔可真实入账+撤销、流水按天分组（支持按月切换、备注关键词搜索与 `CategoryFilterSheet` 分类筛选弹层）、
+  统计月度概览+预算进度条、设置页（预算/外观/背景/备份导入，已拆分为 `components/settings/` 5 个子组件）、
+  PWA manifest+离线 SW+图标、首启种子分类
 - ✅ 流水编辑与删除：整行点进 `/record/:id` 编辑页（改金额/收支/分类/备注/日期/本机标记），
   两段式确认删除（软删除）+ 流水页 4 秒撤销入口；金额键盘与分类平铺已抽成
   `components/AmountPad.vue`、`components/CategoryGrid.vue` 供 Add/Edit 复用
 - ✅ 分类管理：`/categories` 新增 / 重命名 / 删除分类（emoji 文本输入 + 预设一键填入、8 色预设）；
-  有流水引用的分类删除时自动归档、可在「已归档」段恢复；顺带修掉「分类归档后历史流水
-  退化成未分类」的存量缺陷。**入口两处**（底部四个 Tab 入口未动）：设置页「分类管理 ›」卡、
-  统计页标题行右侧「分类管理 ›」快捷入口
+  有流水引用的分类删除时自动归档，可按状态筛选「已归档」后恢复，且历史流水保留原分类名与图标。
+  **入口两处**（底部四个 Tab 入口未动）：设置页「分类管理 ›」卡、统计页标题行右侧「分类管理 ›」快捷入口
 - ✅ 统计图表 + 分类预算：统计页可前后翻月（跨年正确），概览 / 环图（支出构成 + 前 5 图例）/
   柱图（每日支出，今天高亮）/ 分类预算进度（80% 黄、超支红）全部跟随所选月份；
   环图与柱图均为手写 SVG（无图表库）；分类表单新增「月预算」（元输入，空 = 不设）
 - ✅ 统一入口协议：`/#/add?amount=12.5&type=expense&note=午饭&category=餐饮` 打开即预填记账页
-  （参数一次性，读完即从地址栏清除）；记账页新增「⌘ 粘贴」按钮解析剪贴板 JSON
-  （`{"app":"jizhang",...}`，需用户手势触发）；解析规则集中在 `services/entry.js` 纯函数层。
-  **给用户看的配置手册见 `SHORTCUTS.md`**
-- ✅ 液态玻璃 V5（V5-1 `8701d1f..f6a9e68` / V5-2 `c8a3504` / V5-3 `a48e598`，均已验收）：单一材质 +
-  模糊强度 / 玻璃填充两条滑块（持久化）、自适应极性（cover 裁剪 + p88 + `.45/.32` 迟滞 + 首帧 dark）、
-  程序化星空（canvas，无图片素材）、自定义背景（OPFS 字节 + 描述符；图片 / GIF 分辨率门与非破坏迁移、
-  视频 30 MB 上限）、悬浮胶囊底栏、涟漪与 reduced-motion 降级
-- ✅ 2026-10 数据安全升级（B0-B5 + P12-A3）：备份 v2（固定内置分类 ID、v1 保守指纹匹配、导入预览 /
-  校验 / 规划 / 单事务原子写）、批量分类（筛选 / 多选 / 迁移 / 逐项结果）、保存三态、备份提醒
-  （3/7/14/30 天）、完整备份计数与本机标记文案。验收：112 单测、lint/build 通过、9 套 E2E 双环境
-  267/267、文案审计 7/7；签核 `ab5f7a9`，入口 `assets/index-ljOk12_j.js`，GitHub `gh-pages` 产物
-  `9e8ad98`。iOS Safari / 主屏幕 PWA 的备份分享与提醒**待真机验证**（P11-A12）；WorkBuddy 本轮未部署
-  - 批次：B0 `01bac6e`、B1 `deb1b7d`、B2 `1208bdd`、B3 `77f73b4`、B4 `18f4bae`、B5 `7d28236`；
-    lint `fd3ae5d`；文案 `286633f`；qa 脚本 `f781af5` / `ab5f7a9`
-- ✅ 文档：V5 外观口径（V5-4）与 2026-10 数据安全升级已同步到本文件、`docs/DESIGN.md` 与 `SHORTCUTS.md`
+  （参数一次性，读完即从地址栏清除；支持 `autosave=1` 自动入账+4 秒撤销与 OCR 脏金额清洗）；
+  记账页提供「⌘ 粘贴」按钮解析剪贴板 JSON（`{"app":"jizhang",...}`，需用户手势触发）；
+  解析规则集中在 `services/entry.js` 纯函数层。**给用户看的配置手册见 `SHORTCUTS.md`**
+- ✅ 液态玻璃 V5：单一材质 + 模糊强度 / 玻璃填充两条滑块（持久化）、自适应极性
+  （cover 裁剪 + p88 + `.45/.32` 迟滞 + 首帧 dark）、程序化星空（canvas，无图片素材）、
+  自定义背景（OPFS 字节 + 描述符；图片 / GIF 分辨率门与非破坏迁移、视频 30 MB 上限）、
+  记一笔页沉浸取景、悬浮胶囊底栏、涟漪与 reduced-motion 降级
+- ✅ 数据安全与备份：备份 v2（固定内置分类 ID、v1 保守指纹匹配、导入预览 / 校验 / 规划 / 单事务原子写）、
+  批量分类（筛选 / 多选 / 迁移 / 逐项结果）、保存三态、备份提醒（3/7/14/30 天）、完整备份计数披露与
+  本机标记文案
+- ✅ 测试与验收基线：112 例单元/集成测试（`npm test`）+ `scripts/accept_*.cjs` 共 11 套本机 E2E / 文案验收脚本
+- ✅ 文档：V5 外观口径与 2026-10 数据安全升级已更新至本文件、`docs/DESIGN.md` 与 `SHORTCUTS.md`
 - ✅ 部署：静态托管就绪（GitHub Pages 需根目录 `.nojekyll`）；**当前树不含真实站点地址/凭据**，由使用者
   保管并填入 `SHORTCUTS.md`。注意：历史提交 `9f65974` / `ac1cc3b` 仍含旧地址与本机路径（未重写历史），
   不要把地址写回仓库
-- ⬜ 下一步：`webapp://` 拉起 PWA 的真机验证（未验证前推荐 URL 参数路径）
-- ⬜ 后期（Phase 3）：GitHub 私有仓库双人同步、三视角（各自/合并）、本机标记不上传
