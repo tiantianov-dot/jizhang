@@ -5,6 +5,15 @@ import { getAll, getOne, initDB, putOne } from '@/db'
 import { resetDatabase, snapshotJSON } from '@/db/testIsolation'
 import { exportAll, importMerge, previewImport } from '@/repositories/backup'
 import { remove, save } from '@/repositories/categories'
+import {
+  CLOUD_INBOX_CONFIG_KEY,
+  CLOUD_INBOX_STATUS_KEY,
+  getCloudInboxConfig,
+  getCloudInboxStatus,
+  setCloudInboxConfig,
+  setCloudInboxStatus,
+} from '@/repositories/settings'
+import { EXPORTABLE_SETTING_KEYS } from '@/services/backupValidation'
 import { ImportValidationError } from '@/services/importPlanner'
 import { summarizeBackup } from '@/services/backupSummary'
 import { BUILTIN_CATEGORIES, getBuiltinById } from '@/services/builtinCategories'
@@ -378,4 +387,69 @@ test('导出→清库→导入完整恢复：固定 ID、软删/private、设置
   assert.equal(records.find((r) => r.id === 'secret').private, true)
   assert.equal((await getAll('categories')).length, 16)
   assert.equal((await getOne('settings', 'monthlyBudget')).value, 8800)
+})
+
+test('云端收件箱配置与密码永不进入备份导出，恶意导入也不能覆盖', async () => {
+  await fresh()
+  assert.deepEqual(EXPORTABLE_SETTING_KEYS, [
+    'monthlyBudget',
+    'ownerName',
+    'uiGlassIntensity',
+    'uiGlassFill',
+    'backupReminderDays',
+    'backupReminderEnabled',
+  ])
+
+  const secretToken = 'SECRET-INBOX-TOKEN-998877'
+  const secretUrl = 'https://private-inbox.example.test'
+  await setCloudInboxConfig({ url: secretUrl, token: secretToken })
+  await setCloudInboxStatus({
+    lastSyncAt: '2026-11-28T10:00:00.000Z',
+    lastResult: 'ok',
+    lastCount: 3,
+    lastError: '',
+  })
+
+  for (const purpose of ['backup', 'sync']) {
+    const exported = await exportAll({ purpose })
+    const rawJson = JSON.stringify(exported)
+    assert.equal(rawJson.includes(secretToken), false)
+    assert.equal(rawJson.includes(secretUrl), false)
+    assert.equal(
+      exported.settings.some(
+        (row) => row.key === CLOUD_INBOX_CONFIG_KEY || row.key === CLOUD_INBOX_STATUS_KEY,
+      ),
+      false,
+    )
+  }
+
+  const maliciousBackup = payload({
+    settings: [
+      {
+        key: CLOUD_INBOX_CONFIG_KEY,
+        value: { url: 'https://evil.example.test', token: 'EVIL-TOKEN' },
+        updatedAt: FAR_FUTURE(),
+      },
+      {
+        key: CLOUD_INBOX_STATUS_KEY,
+        value: {
+          lastSyncAt: '2099-01-01',
+          lastResult: 'error',
+          lastCount: 99,
+          lastError: 'hijack',
+        },
+        updatedAt: FAR_FUTURE(),
+      },
+    ],
+  })
+
+  const summary = await importMerge(maliciousBackup)
+  assert.equal(summary.settings.updated, 0)
+  assert.deepEqual(await getCloudInboxConfig(), { url: secretUrl, token: secretToken })
+  assert.deepEqual(await getCloudInboxStatus(), {
+    lastSyncAt: '2026-11-28T10:00:00.000Z',
+    lastResult: 'ok',
+    lastCount: 3,
+    lastError: '',
+  })
 })

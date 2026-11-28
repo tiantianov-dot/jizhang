@@ -31,6 +31,8 @@ export const LOCAL_ONLY_SETTING_KEYS = Object.freeze([
   'syncConfig',
   'builtinIdentityVersion',
   'seedVersion',
+  'cloudInboxConfig',
+  'cloudInboxStatus',
 ])
 
 export class ImportValidationError extends Error {

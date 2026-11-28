@@ -1,13 +1,15 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { initDB } from '@/db'
 import { useCategoriesStore } from '@/stores/categories'
 import { useRecordsStore } from '@/stores/records'
 import { useSettingsStore } from '@/stores/settings'
 import { useAppearanceStore } from '@/stores/appearance'
 import { useBackgroundStore } from '@/stores/background'
+import { useCloudInboxStore } from '@/stores/cloudInbox'
 import { usePolarity } from '@/composables/usePolarity'
 import { useGlassRipple } from '@/composables/useGlassRipple'
+import { useToast } from '@/composables/useToast'
 import TabBar from '@/components/TabBar.vue'
 import BackgroundLayer from '@/components/BackgroundLayer.vue'
 import StarfieldLayer from '@/components/StarfieldLayer.vue'
@@ -17,6 +19,12 @@ const records = useRecordsStore()
 const settings = useSettingsStore()
 const appearance = useAppearanceStore()
 const background = useBackgroundStore()
+const cloudInbox = useCloudInboxStore()
+const {
+  message: cloudToast,
+  show: showCloudToast,
+  clear: clearCloudToast,
+} = useToast({ duration: 3500 })
 
 usePolarity()
 useGlassRipple()
@@ -24,7 +32,22 @@ useGlassRipple()
 /** IndexedDB 初始化失败（无痕模式/存储被禁用）时展示兜底说明，而不是白屏 */
 const bootError = ref(false)
 
+async function triggerSilentSync() {
+  if (bootError.value || !cloudInbox.configured) return
+  const result = await cloudInbox.syncNow({ silent: true })
+  if (result?.synced > 0) {
+    showCloudToast(`已同步 ${result.synced} 笔云端账单`)
+  }
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    void triggerSilentSync()
+  }
+}
+
 onMounted(async () => {
+  document.addEventListener('visibilitychange', onVisibilityChange)
   try {
     await initDB()
     await Promise.all([
@@ -33,11 +56,17 @@ onMounted(async () => {
       settings.load(),
       appearance.load(),
       background.load(),
+      cloudInbox.load(),
     ])
+    void triggerSilentSync()
   } catch (err) {
     console.error('[jizhang] initDB failed:', err)
     bootError.value = true
   }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
 
@@ -59,6 +88,14 @@ onMounted(async () => {
     <TabBar />
     <button v-if="background.notice" class="toast bg-notice" @click="background.notice = ''">
       {{ background.notice }}
+    </button>
+    <button
+      v-if="cloudToast"
+      class="toast"
+      data-testid="cloud-sync-toast"
+      @click="clearCloudToast()"
+    >
+      {{ cloudToast }}
     </button>
   </template>
 </template>

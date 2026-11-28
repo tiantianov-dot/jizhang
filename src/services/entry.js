@@ -101,7 +101,9 @@ function normCategory(v) {
 
 /** 自动入账：只认 1 / true（大小写不敏感），其余一律 false。误记风险由撤销 toast 兜底 */
 function normAutosave(v) {
-  const s = String(v ?? '').trim().toLowerCase()
+  const s = String(v ?? '')
+    .trim()
+    .toLowerCase()
   return s === '1' || s === 'true'
 }
 
@@ -150,6 +152,15 @@ function normalize(raw) {
  */
 export function parseEntryQuery(query) {
   return normalize(query)
+}
+
+/**
+ * 规整外部账单草稿（供云端收件箱等外部入口复用，不改变 URL/剪贴板协议行为）。
+ * @param {Record<string, unknown>} raw
+ * @returns {EntryDraft}
+ */
+export function normalizeEntryDraft(raw) {
+  return normalize(raw)
 }
 
 /**

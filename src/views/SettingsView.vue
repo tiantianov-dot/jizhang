@@ -8,6 +8,7 @@ import BudgetSettingCard from '@/components/settings/BudgetSettingCard.vue'
 import AppearanceSettingCard from '@/components/settings/AppearanceSettingCard.vue'
 import BackgroundSettingCard from '@/components/settings/BackgroundSettingCard.vue'
 import BackupSettingCard from '@/components/settings/BackupSettingCard.vue'
+import CloudInboxSettings from '@/components/settings/CloudInboxSettings.vue'
 
 const msg = ref('')
 
@@ -24,6 +25,7 @@ function setMsg(text) {
     <AppearanceSettingCard class="block" />
     <BackgroundSettingCard class="block" @message="setMsg" />
     <BackupSettingCard class="block" @message="setMsg" />
+    <CloudInboxSettings class="block" @message="setMsg" />
 
     <div class="card block">
       <RouterLink class="link-row" to="/categories">

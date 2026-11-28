@@ -92,6 +92,25 @@ export async function list() {
 }
 
 /**
+ * 批量查询已存在的主键集合（含软删除记录），用于云端同步防重与防已删复活。
+ * @param {string[]} ids
+ * @returns {Promise<Set<string>>}
+ */
+export async function existingIds(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return new Set()
+  const targetSet = new Set(ids.filter((id) => typeof id === 'string' && id.length > 0))
+  if (targetSet.size === 0) return new Set()
+  const all = await getAll('records')
+  const found = new Set()
+  for (const rec of all) {
+    if (rec && typeof rec.id === 'string' && targetSet.has(rec.id)) {
+      found.add(rec.id)
+    }
+  }
+  return found
+}
+
+/**
  * 一次全量聚合各分类的引用数（含软删）。批量操作禁止对 N 个分类发 N 次 count。
  * @param {object[]} records
  * @returns {Map<string, {active: number, deleted: number, total: number}>}

@@ -6,10 +6,17 @@ import { resetDatabase } from '@/db/testIsolation'
 import {
   BACKUP_REMINDER_DAYS_KEY,
   BACKUP_REMINDER_ENABLED_KEY,
+  CLOUD_INBOX_CONFIG_KEY,
+  CLOUD_INBOX_STATUS_KEY,
+  clearCloudInboxConfig,
   getBackupReminderDays,
   getBackupReminderEnabled,
+  getCloudInboxConfig,
+  getCloudInboxStatus,
   setBackupReminderDays,
   setBackupReminderEnabled,
+  setCloudInboxConfig,
+  setCloudInboxStatus,
 } from './settings.js'
 
 async function fresh() {
@@ -49,4 +56,51 @@ test('备份提醒设置写入收敛：非 3/7/14/30 存为 7，开关存布尔'
   assert.equal(await getBackupReminderEnabled(), false)
   assert.equal(await setBackupReminderEnabled('yes'), true)
   assert.equal((await getOne('settings', BACKUP_REMINDER_ENABLED_KEY)).value, true)
+})
+
+test('云端收件箱配置与状态读写、规整及清除', async () => {
+  await fresh()
+  assert.deepEqual(await getCloudInboxConfig(), { url: '', token: '' })
+  assert.deepEqual(await getCloudInboxStatus(), {
+    lastSyncAt: '',
+    lastResult: '',
+    lastCount: 0,
+    lastError: '',
+  })
+
+  const saved = await setCloudInboxConfig({
+    url: ' https://inbox.example.test/// ',
+    token: '  tok-123  ',
+  })
+  assert.deepEqual(saved, { url: 'https://inbox.example.test', token: 'tok-123' })
+  assert.deepEqual((await getOne('settings', CLOUD_INBOX_CONFIG_KEY)).value, saved)
+
+  const invalid = await setCloudInboxConfig({ url: 'ftp://bad.example', token: 't' })
+  assert.deepEqual(invalid, { url: '', token: 't' })
+
+  const status = await setCloudInboxStatus({
+    lastSyncAt: '2026-11-28T10:00:00.000Z',
+    lastResult: 'ok',
+    lastCount: 2,
+    lastError: '',
+  })
+  assert.deepEqual(status, {
+    lastSyncAt: '2026-11-28T10:00:00.000Z',
+    lastResult: 'ok',
+    lastCount: 2,
+    lastError: '',
+  })
+  assert.deepEqual((await getOne('settings', CLOUD_INBOX_STATUS_KEY)).value, status)
+
+  const sanitized = await setCloudInboxStatus({
+    lastSyncAt: 123,
+    lastResult: 'unknown',
+    lastCount: -5,
+    lastError: null,
+  })
+  assert.deepEqual(sanitized, { lastSyncAt: '', lastResult: '', lastCount: 0, lastError: '' })
+
+  await clearCloudInboxConfig()
+  assert.equal(await getOne('settings', CLOUD_INBOX_CONFIG_KEY), undefined)
+  assert.equal(await getOne('settings', CLOUD_INBOX_STATUS_KEY), undefined)
 })
